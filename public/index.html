@@ -202,7 +202,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  setTimeout(() => body.classList.remove('intro'), 1600); root.style.setProperty('--r', getComputedStyle(root).getPropertyValue('--rmax').includes('min') ? innerWidth*.28+'px' : '320px');
+  setTimeout(() => body.classList.remove('intro'), 1600); root.style.setProperty('--r', matchMedia('(pointer:coarse),(max-width:760px)').matches ? innerWidth*.28+'px' : '320px');
   // keep --r at 320 after intro (animation fills until then)
 
   fetch('/pieces.json').then(r => r.json()).then(render).catch(() => render([]));
