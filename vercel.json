@@ -1,0 +1,1 @@
+{ "buildCommand": "npm run build", "outputDirectory": "dist", "installCommand": "true", "framework": null, "cleanUrls": false, "trailingSlash": true }
