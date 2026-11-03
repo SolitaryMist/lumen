@@ -2,7 +2,7 @@
 
 A daily collection of interaction, motion and 3D studies — GSAP, WebGL, shaders, physics, generative work.
 
-Live: https://lumen.vercel.app (see repo About for the current URL)
+Live: https://lumen-motion.vercel.app
 
 ## Structure
 
