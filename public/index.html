@@ -2,44 +2,193 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lumen</title>
-<meta name="description" content="Lumen — a daily collection of interaction, motion and 3D studies.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lumen — One interaction a day.</title>
+<meta name="description" content="Lumen — one interaction a day. Motion studies in Web, SwiftUI and Compose by @aldininin.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: dark; --fg:#f2f2f0; --dim:#6b6b68; --line:#1c1c1b; }
-  * { box-sizing: border-box; margin: 0; }
-  body { background:#000; color:var(--fg); font:15px/1.5 ui-sans-serif, -apple-system, "Inter", "Helvetica Neue", sans-serif; min-height:100vh; padding: clamp(28px,6vw,88px); -webkit-font-smoothing:antialiased; }
-  header { display:flex; justify-content:space-between; align-items:baseline; gap:24px; margin-bottom: clamp(64px,14vh,160px); }
-  h1 { font-size: clamp(56px,11vw,148px); font-weight:500; letter-spacing:-.05em; line-height:.9; }
-  header p { color:var(--dim); max-width:22ch; text-align:right; }
-  ol { list-style:none; padding:0; border-top:1px solid var(--line); }
-  li a { display:grid; grid-template-columns: 4ch 1fr auto; gap:24px; padding:18px 0; border-bottom:1px solid var(--line); color:inherit; text-decoration:none; transition: padding .4s cubic-bezier(.2,.8,.2,1), color .3s; }
-  li a:hover { padding-left:12px; }
-  .no, .date { color:var(--dim); font-variant-numeric: tabular-nums; }
-  .empty { color:var(--dim); padding:18px 0; }
-  footer { margin-top:96px; color:var(--dim); font-size:13px; }
-  footer a { color:inherit; }
-  @media (max-width:600px){ header{flex-direction:column} header p{text-align:left} }
+@property --r { syntax:'<length>'; inherits:true; initial-value:0px; }
+:root{
+  color-scheme:dark; --bg:#0B0B0C; --fg:#EDEDED; --dim:#6B6B6B; --amber:#FFB547;
+  --ease:cubic-bezier(0.16,1,0.3,1);
+  --x:50vw; --y:50vh; --r:0px;           /* light, viewport coords; written by JS */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg)}
+body{background:var(--bg);color:var(--fg);font:600 15px/1.4 Geist,"Inter Display",Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:-.04em;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.mono{font:400 12px/1.4 "JetBrains Mono",ui-monospace,monospace;letter-spacing:0;color:var(--dim)}
+a{color:inherit;text-decoration:none}
+
+/* the light: fixed layer, only transforms/opacity-free gradient driven by vars */
+.glow{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(circle var(--r) at var(--x) var(--y),rgba(255,181,71,.16),rgba(255,181,71,.05) 45%,transparent 100%)}
+body.intro .glow,body.intro .hero-lit{animation:grow 900ms var(--ease) 400ms both}
+@keyframes grow{from{--r:0px}to{--r:320px}}
+
+.hero{position:relative;z-index:1;min-height:100svh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:6vw}
+.word{position:relative;font-size:18vw;line-height:.85;letter-spacing:-.04em;font-weight:600}
+.word span{display:block}
+.hero-base{opacity:.08}
+.hero-lit{position:absolute;inset:0;color:var(--fg);
+  /* mask in viewport coords: element is in normal flow, so convert with --hx/--hy (hero offset) */
+  -webkit-mask:radial-gradient(circle var(--r) at calc(var(--x) - var(--hx,0px)) calc(var(--y) - var(--hy,0px)),#000 0,rgba(0,0,0,.6) 40%,transparent 100%);
+          mask:radial-gradient(circle var(--r) at calc(var(--x) - var(--hx,0px)) calc(var(--y) - var(--hy,0px)),#000 0,rgba(0,0,0,.6) 40%,transparent 100%)}
+.sub{margin-top:3vw;font-size:clamp(18px,2vw,28px);color:var(--fg)}
+.issue{margin-top:14px}
+body.intro .sub,body.intro .issue{animation:rise 900ms var(--ease) 600ms both}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}}
+
+main{position:relative;z-index:1;padding:0 clamp(20px,5vw,72px) 120px;max-width:1440px;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.card{position:relative;display:block;border-radius:14px;overflow:hidden;aspect-ratio:4/5;background:#111113;
+  opacity:0;transform:translateY(20px);transition:opacity 600ms var(--ease),transform 600ms var(--ease);transition-delay:var(--d,0ms)}
+.card.in{opacity:1;transform:none}
+.card.in.lit{transform:translateY(-4px);transition:transform 300ms var(--ease)}
+.card.lit,.card:hover{box-shadow:0 0 0 1px rgba(255,181,71,.35),0 20px 60px -20px rgba(255,181,71,.25)}
+.card.in:hover{transform:translateY(-4px);transition:transform 300ms var(--ease)}
+.pv{position:absolute;inset:0;filter:grayscale(1) brightness(.3);transition:filter 300ms var(--ease)}
+.card.lit .pv,.card:hover .pv{filter:none}
+.pv iframe{width:100%;height:100%;border:0;pointer-events:none}
+.meta{position:absolute;left:0;right:0;bottom:0;padding:18px 20px;background:linear-gradient(transparent,rgba(11,11,12,.85));
+  transform:translateY(100%);transition:transform 300ms var(--ease)}
+.card.lit .meta,.card:hover .meta{transform:none}
+.meta h3{font-size:20px;font-weight:600;margin:4px 0 6px}
+.card:hover .meta .no,.card.lit .meta .no{color:var(--amber)}
+
+/* generative placeholders */
+.ph{position:absolute;inset:0;display:grid;place-items:center}
+.ph-orbit i{position:absolute;width:12px;height:12px;border-radius:50%;background:#EDEDED;left:50%;top:50%;margin:-6px;animation:orbit 3.2s linear infinite;animation-delay:calc(var(--i) * -.4s);offset-path:circle(30% at 50% 50%)}
+@supports not (offset-path:circle(30%)){.ph-orbit i{animation:orbit2 3.2s linear infinite;animation-delay:calc(var(--i) * -.4s)}}
+@keyframes orbit{to{offset-distance:100%}}
+@keyframes orbit2{from{transform:rotate(0) translateX(70px)}to{transform:rotate(360deg) translateX(70px)}}
+.ph-orbit i:nth-child(1){background:var(--amber)}
+.ph-bars{display:flex;gap:8px;align-items:center;justify-content:center}
+.ph-bars i{width:8px;height:120px;border-radius:4px;background:linear-gradient(#FFB547,#ff6a3d);animation:eq 1.2s var(--ease) infinite alternate;animation-delay:calc(var(--i) * -.15s);transform-origin:center}
+@keyframes eq{from{transform:scaleY(.15)}to{transform:scaleY(1)}}
+.ph-blob span{width:46%;aspect-ratio:1;background:conic-gradient(from 0deg,#FFB547,#7aa2ff,#c38bff,#FFB547);filter:blur(2px);animation:morph 6s ease-in-out infinite,spin 9s linear infinite}
+@keyframes morph{0%,100%{border-radius:42% 58% 63% 37%/41% 44% 56% 59%}50%{border-radius:63% 37% 38% 62%/55% 62% 38% 45%}}
+@keyframes spin{to{rotate:360deg}}
+
+footer{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;padding:32px clamp(20px,5vw,72px) 48px;color:var(--dim);font-size:14px;letter-spacing:-.02em}
+footer nav{display:flex;gap:24px}
+footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--amber)}
+
+@media (max-width:760px){.grid{grid-template-columns:1fr}.card{aspect-ratio:4/3}}
+@media (prefers-reduced-motion:reduce){
+  body.intro .glow,body.intro .hero-lit,body.intro .sub,body.intro .issue{animation:none}
+  :root{--r:320px}
+  .card{transition:none;opacity:1;transform:none}
+  .ph *{animation:none!important}
+}
 </style>
 </head>
-<body>
-<header>
-  <h1>Lumen</h1>
-  <p>A daily collection of interaction, motion and 3D studies.</p>
-</header>
-<main><ol id="list"><li class="empty">First piece arriving soon.</li></ol></main>
-<footer><a href="https://x.com/aldininin">@aldininin</a> · <a href="https://github.com/SolitaryMist/lumen">source</a></footer>
+<body class="intro">
+<div class="glow" aria-hidden="true"></div>
+<section class="hero">
+  <h1 class="word" id="word"><span class="hero-base">Lumen</span><span class="hero-lit" aria-hidden="true">Lumen</span></h1>
+  <p class="sub">One interaction a day.</p>
+  <p class="issue mono" id="issue">No. 001 · Nov 4</p>
+</section>
+<main><div class="grid" id="grid"></div></main>
+<footer>
+  <span>Built daily by <a href="https://x.com/aldininin">@aldininin</a></span>
+  <nav class="mono"><a href="https://github.com/SolitaryMist/lumen">GitHub</a><a href="https://x.com/aldininin">X</a></nav>
+</footer>
 <script>
-fetch('/pieces.json').then(r => r.json()).then(items => {
-  if (!items.length) return;
-  const ol = document.getElementById('list'); ol.innerHTML = '';
-  for (const p of items) {
-    const li = document.createElement('li');
-    li.innerHTML = `<a href="/${p.slug}/"><span class="no">${p.no}</span><span class="t"></span><span class="date">${p.date}</span></a>`;
-    li.querySelector('.t').textContent = p.title;
-    ol.appendChild(li);
+(() => {
+  const root = document.documentElement, body = document.body;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmt = d => { const t = new Date(d + 'T00:00:00'); return isNaN(t) ? '' : `${MON[t.getMonth()]} ${t.getDate()}`; };
+  const TAGS = 'Web · SwiftUI · Compose';
+  const PH = ['orbit','bars','blob'];
+  const grid = document.getElementById('grid');
+
+  function render(items) {
+    const list = items.length ? items : [
+      { no:'001', title:'Arriving Nov 4', ph:'orbit' }, { no:'002', title:'Soon', ph:'bars' }, { no:'003', title:'Soon', ph:'blob' }];
+    if (items.length) document.getElementById('issue').textContent = `No. ${items[0].no}${items[0].date ? ' · ' + fmt(items[0].date) : ''}`;
+    grid.innerHTML = '';
+    list.forEach((p, i) => {
+      const a = document.createElement(p.slug ? 'a' : 'div');
+      a.className = 'card'; if (p.slug) a.href = `/${p.slug}/`;
+      const kind = p.ph || PH[i % 3];
+      const n = kind === 'bars' ? 9 : kind === 'orbit' ? 8 : 0;
+      const ph = kind === 'blob' ? '<span></span>' : Array.from({length:n},(_,k)=>`<i style="--i:${k}"></i>`).join('');
+      // real pieces: lazy iframe of the piece itself as the looping preview
+      const pv = p.slug ? `<iframe src="/${p.slug}/" loading="lazy" tabindex="-1" title=""></iframe>` : `<div class="ph ph-${kind}">${ph}</div>`;
+      a.innerHTML = `<div class="pv">${pv}</div><div class="meta"><span class="mono no">No. ${p.no}${p.date ? ' · ' + fmt(p.date) : ''}</span><h3></h3><span class="mono">${TAGS}</span></div>`;
+      a.querySelector('h3').textContent = p.title;
+      grid.appendChild(a);
+    });
+    cards = [...grid.children]; measure(); observe();
   }
-}).catch(() => {});
+
+  // scroll-in stagger
+  let cards = [];
+  function observe() {
+    const io = new IntersectionObserver(es => {
+      let k = 0;
+      for (const e of es) if (e.isIntersecting) { e.target.style.setProperty('--d', (k++ * 60) + 'ms'); e.target.classList.add('in'); io.unobserve(e.target); }
+    }, { threshold: .15 });
+    cards.forEach(c => io.observe(c));
+  }
+
+  // cached geometry (document coords) — read only on resize/load, never per frame
+  let rects = [], hero = {x:0,y:0};
+  function measure() {
+    const sy = scrollY, sx = scrollX, w = document.getElementById('word').getBoundingClientRect();
+    hero = { x: w.left + sx, y: w.top + sy };
+    rects = cards.map(c => { const r = c.getBoundingClientRect(); return { l:r.left+sx, t:r.top+sy - (c.classList.contains('in')?0:20), r:r.right+sx, b:r.bottom+sy }; });
+  }
+  addEventListener('resize', measure); addEventListener('load', measure);
+  document.fonts && document.fonts.ready.then(measure);
+
+  // spring (stiffness 120, damping 20, mass 1)
+  const K = 120, C = 20;
+  let tx = innerWidth/2, ty = innerHeight/2, x = tx, y = ty, vx = 0, vy = 0, touching = false, last = performance.now();
+  if (!reduce) {
+    addEventListener('pointermove', e => { tx = e.clientX; ty = e.clientY; if (e.pointerType !== 'mouse') touching = true; }, {passive:true});
+    addEventListener('pointerdown', e => { tx = e.clientX; ty = e.clientY; touching = e.pointerType !== 'mouse'; }, {passive:true});
+    addEventListener('pointerup', e => { if (e.pointerType !== 'mouse') touching = false; }, {passive:true});
+    addEventListener('pointercancel', () => touching = false, {passive:true});
+  }
+  const lit = new Set();
+  function frame(now) {
+    const dt = Math.min(.032, (now - last) / 1000); last = now;
+    if (reduce) { x = innerWidth/2; y = innerHeight/2; }
+    else {
+      if (coarse && !touching) { // drift near midline, following scroll
+        const t = now / 1000, s = scrollY;
+        tx = innerWidth/2 + Math.sin(t*.35 + s*.004) * innerWidth*.28;
+        ty = innerHeight/2 + Math.sin(t*.27 + s*.006) * innerHeight*.08;
+      }
+      vx += (K*(tx-x) - C*vx) * dt; vy += (K*(ty-y) - C*vy) * dt;
+      x += vx*dt; y += vy*dt;
+    }
+    root.style.setProperty('--x', x.toFixed(1)+'px');
+    root.style.setProperty('--y', y.toFixed(1)+'px');
+    const sy = scrollY, sx = scrollX;
+    root.style.setProperty('--hx', (hero.x - sx).toFixed(1)+'px');
+    root.style.setProperty('--hy', (hero.y - sy).toFixed(1)+'px');
+    // light hits card when the 320px circle (core ~60%) overlaps its rect
+    const px = x + sx, py = y + sy, R = 320 * .6;
+    for (let i = 0; i < cards.length; i++) {
+      const r = rects[i]; if (!r) continue;
+      const dx = Math.max(r.l - px, 0, px - r.r), dy = Math.max(r.t - py, 0, py - r.b);
+      const on = dx*dx + dy*dy < R*R;
+      if (on !== lit.has(i)) { on ? lit.add(i) : lit.delete(i); cards[i].classList.toggle('lit', on); }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  setTimeout(() => body.classList.remove('intro'), 1600); root.style.setProperty('--r','320px');
+  // keep --r at 320 after intro (animation fills until then)
+
+  fetch('/pieces.json').then(r => r.json()).then(render).catch(() => render([]));
+})();
 </script>
 </body>
 </html>
