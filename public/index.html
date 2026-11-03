@@ -12,7 +12,7 @@
 :root{
   color-scheme:dark; --bg:#0B0B0C; --fg:#EDEDED; --dim:#6B6B6B; --amber:#FFB547;
   --ease:cubic-bezier(0.16,1,0.3,1);
-  --x:50vw; --y:50vh; --r:0px;           /* light, viewport coords; written by JS */
+  --x:50vw; --y:50vh; --r:0px; --rmax:320px;           /* light, viewport coords; written by JS */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{background:var(--bg)}
@@ -24,7 +24,7 @@ a{color:inherit;text-decoration:none}
 .glow{position:fixed;inset:0;pointer-events:none;z-index:0;
   background:radial-gradient(circle var(--r) at var(--x) var(--y),rgba(255,181,71,.16),rgba(255,181,71,.05) 45%,transparent 100%)}
 body.intro .glow,body.intro .hero-lit{animation:grow 900ms var(--ease) 400ms both}
-@keyframes grow{from{--r:0px}to{--r:320px}}
+@keyframes grow{from{--r:0px}to{--r:var(--rmax)}}
 
 .hero{position:relative;z-index:1;min-height:100svh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:6vw}
 .word{position:relative;font-size:18vw;line-height:.85;letter-spacing:-.04em;font-weight:600}
@@ -76,10 +76,15 @@ footer{position:relative;z-index:1;display:flex;justify-content:space-between;al
 footer nav{display:flex;gap:24px}
 footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
 
+@media (pointer:coarse),(max-width:760px){
+  :root{--rmax:min(200px,55vw)}
+  .hero-lit{color:#fff;-webkit-mask:radial-gradient(circle var(--r) at calc(var(--x) - var(--hx,0px)) calc(var(--y) - var(--hy,0px)),#000 0,#000 55%,transparent 100%);mask:radial-gradient(circle var(--r) at calc(var(--x) - var(--hx,0px)) calc(var(--y) - var(--hy,0px)),#000 0,#000 55%,transparent 100%)}
+  .glow{background:radial-gradient(circle var(--r) at var(--x) var(--y),rgba(255,181,71,.22),rgba(255,181,71,.12) 55%,transparent 100%)}
+}
 @media (max-width:760px){.grid{grid-template-columns:1fr}.card{aspect-ratio:4/3}}
 @media (prefers-reduced-motion:reduce){
   body.intro .glow,body.intro .hero-lit,body.intro .sub,body.intro .issue{animation:none}
-  :root{--r:320px}
+  :root{--r:var(--rmax)}
   .card{transition:none;opacity:1;transform:none}
   .ph *{animation:none!important}
 }
@@ -90,7 +95,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
 <section class="hero">
   <h1 class="word" id="word"><span class="hero-base">Lumen</span><span class="hero-lit" aria-hidden="true">Lumen</span></h1>
   <p class="sub">One interaction a day.</p>
-  <p class="issue mono" id="issue">No. 001 · Nov 4</p>
+  <p class="issue mono" id="issue">No. 000 · Index</p>
 </section>
 <main><div class="grid" id="grid"></div></main>
 <footer>
@@ -142,15 +147,20 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
   let rects = [], hero = {x:0,y:0};
   function measure() {
     const sy = scrollY, sx = scrollX, w = document.getElementById('word').getBoundingClientRect();
-    hero = { x: w.left + sx, y: w.top + sy };
+    hero = { x: w.left + sx, y: w.top + sy, w: w.width, h: w.height };
     rects = cards.map(c => { const r = c.getBoundingClientRect(); return { l:r.left+sx, t:r.top+sy - (c.classList.contains('in')?0:20), r:r.right+sx, b:r.bottom+sy }; });
   }
   addEventListener('resize', measure); addEventListener('load', measure);
   document.fonts && document.fonts.ready.then(measure);
 
   // spring (stiffness 120, damping 20, mass 1)
+  const mobile = matchMedia('(pointer: coarse), (max-width: 760px)').matches;
+  const RMAX = mobile ? Math.min(200, innerWidth * .55) : 320;
+  // cubic-bezier(0.65,0,0.35,1) solver
+  const bez = (x1,y1,x2,y2) => t => { const B=(a,b,u)=>3*a*u*(1-u)*(1-u)+3*b*u*u*(1-u)+u*u*u; let lo=0,hi=1,u=t; for(let i=0;i<24;i++){u=(lo+hi)/2; B(x1,x2,u)<t?lo=u:hi=u;} return B(y1,y2,u); };
+  const sweepEase = bez(.65,0,.35,1); let sweepStart = performance.now() + 400, sweeping = mobile && !reduce;
   const K = 120, C = 20;
-  let tx = innerWidth/2, ty = innerHeight/2, x = tx, y = ty, vx = 0, vy = 0, touching = false, last = performance.now();
+  let driftT0 = 0, tx = innerWidth/2, ty = innerHeight/2, x = tx, y = ty, vx = 0, vy = 0, touching = false, last = performance.now();
   if (!reduce) {
     addEventListener('pointermove', e => { tx = e.clientX; ty = e.clientY; if (e.pointerType !== 'mouse') touching = true; }, {passive:true});
     addEventListener('pointerdown', e => { tx = e.clientX; ty = e.clientY; touching = e.pointerType !== 'mouse'; }, {passive:true});
@@ -162,8 +172,13 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
     const dt = Math.min(.032, (now - last) / 1000); last = now;
     if (reduce) { x = innerWidth/2; y = innerHeight/2; }
     else {
-      if (coarse && !touching) { // drift near midline, following scroll
-        const t = now / 1000, s = scrollY;
+      if (sweeping && !touching) {
+        const k = Math.min(1, Math.max(0, (now - sweepStart) / 1200)), e = sweepEase(k);
+        const hx = hero.x - scrollX, w = hero.w;
+        x = tx = hx - RMAX*.3 + e * (w + RMAX*.6); y = ty = hero.y - scrollY + hero.h/2; vx = vy = 0;
+        if (k >= 1) { sweeping = false; driftT0 = now; }
+      } else if (mobile && !touching) { // drift near midline, following scroll
+        const t = (now - driftT0) / 1000 + 3.5, s = scrollY;
         tx = innerWidth/2 + Math.sin(t*2*Math.PI/14 + s*.0012) * innerWidth*.28;
         ty = innerHeight/2 + Math.sin(t*2*Math.PI/19 + s*.0015) * innerHeight*.08;
       }
@@ -176,7 +191,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
     root.style.setProperty('--hx', (hero.x - sx).toFixed(1)+'px');
     root.style.setProperty('--hy', (hero.y - sy).toFixed(1)+'px');
     // light hits card when the 320px circle (core ~60%) overlaps its rect
-    const px = x + sx, py = y + sy, R = 320 * .6;
+    const px = x + sx, py = y + sy, R = RMAX * .6;
     for (let i = 0; i < cards.length; i++) {
       const r = rects[i]; if (!r) continue;
       const dx = Math.max(r.l - px, 0, px - r.r), dy = Math.max(r.t - py, 0, py - r.b);
@@ -186,7 +201,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  setTimeout(() => body.classList.remove('intro'), 1600); root.style.setProperty('--r','320px');
+  setTimeout(() => body.classList.remove('intro'), 1600); root.style.setProperty('--r', getComputedStyle(root).getPropertyValue('--rmax').includes('min') ? Math.min(200, innerWidth*.55)+'px' : '320px');
   // keep --r at 320 after intro (animation fills until then)
 
   fetch('/pieces.json').then(r => r.json()).then(render).catch(() => render([]));
