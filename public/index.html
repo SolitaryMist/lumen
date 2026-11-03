@@ -123,7 +123,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
   <p class="issue mono" id="issue">No. 000 · Index</p>
 </section>
 <main><div class="grid" id="grid"></div></main>
-<section class="sub-wrap" id="subscribe">
+<section class="sub-wrap" id="subscribe" hidden>
   <h2>One piece a week.</h2>
   <p class="note">No spam, just light.</p>
   <form class="sub-form" id="subform" action="https://buttondown.com/api/emails/embed-subscribe/BUTTONDOWN_USERNAME" method="post" novalidate>
@@ -243,7 +243,8 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
 </script>
 <script>
 (() => {
-  const f=document.getElementById('subform'),row=document.getElementById('subrow'),btn=document.getElementById('subbtn'),wrap=document.getElementById('subscribe'),rs=document.documentElement.style;
+  const f=document.getElementById('subform'); if(!f.action.includes('BUTTONDOWN_USERNAME')) document.getElementById('subscribe').hidden=false; else return;
+  const _f=f,row=document.getElementById('subrow'),btn=document.getElementById('subbtn'),wrap=document.getElementById('subscribe'),rs=document.documentElement.style;
   const label=btn.innerHTML, fail=()=>{row.classList.remove('err');void row.offsetWidth;row.classList.add('err');btn.innerHTML=label};
   f.addEventListener('submit',async e=>{e.preventDefault();const em=f.email.value.trim();
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))return fail();
