@@ -72,13 +72,37 @@ main{position:relative;z-index:1;padding:0 clamp(20px,5vw,72px) 120px;max-width:
 @keyframes morph{0%,100%{border-radius:42% 58% 63% 37%/41% 44% 56% 59%}50%{border-radius:63% 37% 38% 62%/55% 62% 38% 45%}}
 @keyframes spin{to{rotate:360deg}}
 
+
+/* subscribe */
+.sub-wrap{position:relative;z-index:1;text-align:center;padding:120px 24px}
+.sub-wrap h2{font-size:32px;font-weight:600;letter-spacing:-.03em;color:var(--fg)}
+.sub-wrap .note{margin-top:12px;font:400 13px/1.4 "JetBrains Mono",ui-monospace,monospace;color:var(--dim)}
+.sub-row{--line:#2A2A2A;position:relative;display:flex;align-items:center;gap:16px;width:420px;max-width:100%;height:48px;margin:32px auto 0;transition:opacity 300ms var(--ease)}
+.sub-row::before,.sub-row::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px}
+.sub-row::before{background:var(--line);transition:background 300ms}
+.sub-row::after{background:var(--amber);transform:scaleX(0);transition:transform 400ms var(--ease)}
+.sub-row:focus-within::after{transform:scaleX(1)}
+.sub-row.err::after{background:#FF5A5A;transform:scaleX(1)}
+.sub-row.err{animation:shake 240ms linear}
+@keyframes shake{25%{translate:-4px}50%{translate:4px}75%{translate:-4px}100%{translate:0}}
+.sub-row input{flex:1;min-width:0;height:100%;background:none;border:0;outline:0;color:var(--fg);font:400 16px/1 Geist,Inter,system-ui,sans-serif;letter-spacing:-.02em}
+.sub-row input::placeholder{color:var(--dim)}
+.sub-row button{background:none;border:0;color:var(--fg);font:600 15px/1 inherit;letter-spacing:-.02em;cursor:pointer;white-space:nowrap}
+.sub-row button i{display:inline-block;font-style:normal;transition:transform 200ms var(--ease)}
+.sub-row button:hover i{transform:translateX(4px)}
+.dots b{animation:blink 900ms infinite both}.dots b:nth-child(2){animation-delay:150ms}.dots b:nth-child(3){animation-delay:300ms}
+@keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+.sub-done{position:absolute;inset:auto 0 0;margin-top:32px;opacity:0;pointer-events:none;transition:opacity 300ms var(--ease) 300ms;color:var(--fg);font-size:16px}
+.sub-wrap.ok .sub-row{opacity:0;pointer-events:none}.sub-wrap.ok .sub-done{opacity:1}
+.sub-form{position:relative}
+@media (max-width:760px){.sub-wrap h2{font-size:24px}.sub-row{width:100%}}
 footer{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;padding:32px clamp(20px,5vw,72px) 48px;color:var(--dim);font-size:14px;letter-spacing:-.02em}
 footer nav{display:flex;gap:24px}
 footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
 
 @media (pointer:coarse),(max-width:760px){
   :root{--rmax:min(120px,28vw)}
-  .word{font-size:28vw}
+  .word{font-size:26.5vw}
   .hero-lit{color:#fff;-webkit-mask:radial-gradient(circle var(--r) at calc(var(--x) - var(--hx,0px)) calc(var(--y) - var(--hy,0px)),#000 0,#000 55%,transparent 100%);mask:radial-gradient(circle var(--r) at calc(var(--x) - var(--hx,0px)) calc(var(--y) - var(--hy,0px)),#000 0,#000 55%,transparent 100%)}
   .glow{background:radial-gradient(circle var(--r) at var(--x) var(--y),rgba(255,181,71,.22) 0%,rgba(255,181,71,.08) 60%,rgba(255,181,71,0) 100%)}
 }
@@ -99,6 +123,14 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
   <p class="issue mono" id="issue">No. 000 · Index</p>
 </section>
 <main><div class="grid" id="grid"></div></main>
+<section class="sub-wrap" id="subscribe">
+  <h2>One piece a week.</h2>
+  <p class="note">No spam, just light.</p>
+  <form class="sub-form" id="subform" action="https://buttondown.com/api/emails/embed-subscribe/BUTTONDOWN_USERNAME" method="post" novalidate>
+    <div class="sub-row" id="subrow"><input type="email" name="email" placeholder="you@email.com" autocomplete="email" required aria-label="Email"><button type="submit" id="subbtn">Subscribe <i>→</i></button></div>
+    <p class="sub-done" role="status">You're in. See you next week.</p>
+  </form>
+</section>
 <footer>
   <span>Built daily by <a href="https://x.com/aldininin">@aldininin</a></span>
   <nav class="mono"><a href="https://github.com/SolitaryMist/lumen">GitHub</a><a href="https://x.com/aldininin">X</a></nav>
@@ -206,6 +238,20 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
   // keep --r at 320 after intro (animation fills until then)
 
   fetch('/pieces.json').then(r => r.json()).then(render).catch(() => render([]));
+})();
+</script>
+<script>
+(() => {
+  const f=document.getElementById('subform'),row=document.getElementById('subrow'),btn=document.getElementById('subbtn'),wrap=document.getElementById('subscribe'),rs=document.documentElement.style;
+  const label=btn.innerHTML, fail=()=>{row.classList.remove('err');void row.offsetWidth;row.classList.add('err');btn.innerHTML=label};
+  f.addEventListener('submit',async e=>{e.preventDefault();const em=f.email.value.trim();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))return fail();
+    row.classList.remove('err');btn.innerHTML='<span class="dots"><b>.</b><b>.</b><b>.</b></span>';
+    try{await fetch(f.action,{method:'POST',mode:'no-cors',body:new FormData(f)});wrap.classList.add('ok')}catch(_){fail()}});
+  // the line brightens as the light comes near
+  const tick=()=>{const b=row.getBoundingClientRect(),x=parseFloat(rs.getPropertyValue('--x')),y=parseFloat(rs.getPropertyValue('--y'));
+    if(b.bottom>0&&b.top<innerHeight&&!isNaN(x)){const d=Math.hypot(x-(b.left+b.width/2),y-b.bottom),k=Math.max(0,1-d/360),v=Math.round(42+k*(107-42)).toString(16).padStart(2,'0');row.style.setProperty('--line','#'+v+v+v)}
+    requestAnimationFrame(tick)};requestAnimationFrame(tick);
 })();
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
