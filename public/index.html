@@ -44,11 +44,14 @@ main{position:relative;z-index:1;padding:0 clamp(20px,5vw,72px) 120px;max-width:
 .card{position:relative;display:block;border-radius:14px;overflow:hidden;aspect-ratio:4/5;background:#111113;
   opacity:0;transform:translateY(20px);transition:opacity 600ms var(--ease),transform 600ms var(--ease);transition-delay:var(--d,0ms)}
 .card.in{opacity:1;transform:none}
-.card.in.lit{transform:translateY(-4px);transition:transform 300ms var(--ease)}
-.card.lit,.card:hover{box-shadow:0 0 0 1px rgba(255,181,71,.35),0 20px 60px -20px rgba(255,181,71,.25)}
-.card.in:hover{transform:translateY(-4px);transition:transform 300ms var(--ease)}
+.card.in.lit{transform:translateY(-4px)}
+.card{box-shadow:0 0 0 1px rgba(255,181,71,0)}
+.card.in.lit,.card.in:hover{box-shadow:0 0 0 1px rgba(255,181,71,.35);transition:transform 300ms var(--ease),box-shadow 300ms var(--ease)}
+.card.in:hover{transform:translateY(-4px)}
 .pv{position:absolute;inset:0;filter:grayscale(1) brightness(.3);transition:filter 300ms var(--ease)}
 .card.lit .pv,.card:hover .pv{filter:none}
+.card.ph-card .pv,.card.ph-card.lit .pv,.card.ph-card:hover .pv{filter:grayscale(1) brightness(.3)}
+.card.ph-card.lit .pv,.card.ph-card:hover .pv{filter:grayscale(1) brightness(.85)}
 .pv iframe{width:100%;height:100%;border:0;pointer-events:none}
 .meta{position:absolute;left:0;right:0;bottom:0;padding:18px 20px;background:linear-gradient(transparent,rgba(11,11,12,.85));
   transform:translateY(100%);transition:transform 300ms var(--ease)}
@@ -62,17 +65,16 @@ main{position:relative;z-index:1;padding:0 clamp(20px,5vw,72px) 120px;max-width:
 @supports not (offset-path:circle(30%)){.ph-orbit i{animation:orbit2 3.2s linear infinite;animation-delay:calc(var(--i) * -.4s)}}
 @keyframes orbit{to{offset-distance:100%}}
 @keyframes orbit2{from{transform:rotate(0) translateX(70px)}to{transform:rotate(360deg) translateX(70px)}}
-.ph-orbit i:nth-child(1){background:var(--amber)}
 .ph-bars{display:flex;gap:8px;align-items:center;justify-content:center}
-.ph-bars i{width:8px;height:120px;border-radius:4px;background:linear-gradient(#FFB547,#ff6a3d);animation:eq 1.2s var(--ease) infinite alternate;animation-delay:calc(var(--i) * -.15s);transform-origin:center}
+.ph-bars i{width:8px;height:120px;border-radius:4px;background:linear-gradient(#EDEDED,#6B6B6B);animation:eq 1.2s var(--ease) infinite alternate;animation-delay:calc(var(--i) * -.15s);transform-origin:center}
 @keyframes eq{from{transform:scaleY(.15)}to{transform:scaleY(1)}}
-.ph-blob span{width:46%;aspect-ratio:1;background:conic-gradient(from 0deg,#FFB547,#7aa2ff,#c38bff,#FFB547);filter:blur(2px);animation:morph 6s ease-in-out infinite,spin 9s linear infinite}
+.ph-blob span{width:46%;aspect-ratio:1;background:conic-gradient(from 0deg,#EDEDED,#3a3a3c,#9a9a9a,#EDEDED);filter:blur(2px);animation:morph 6s ease-in-out infinite,spin 9s linear infinite}
 @keyframes morph{0%,100%{border-radius:42% 58% 63% 37%/41% 44% 56% 59%}50%{border-radius:63% 37% 38% 62%/55% 62% 38% 45%}}
 @keyframes spin{to{rotate:360deg}}
 
 footer{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;padding:32px clamp(20px,5vw,72px) 48px;color:var(--dim);font-size:14px;letter-spacing:-.02em}
 footer nav{display:flex;gap:24px}
-footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--amber)}
+footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
 
 @media (max-width:760px){.grid{grid-template-columns:1fr}.card{aspect-ratio:4/3}}
 @media (prefers-reduced-motion:reduce){
@@ -108,12 +110,12 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--amber)}
 
   function render(items) {
     const list = items.length ? items : [
-      { no:'001', title:'Arriving Nov 4', ph:'orbit' }, { no:'002', title:'Soon', ph:'bars' }, { no:'003', title:'Soon', ph:'blob' }];
+      { no:'001', title:'Coming soon', ph:'orbit' }, { no:'002', title:'Coming soon', ph:'bars' }, { no:'003', title:'Coming soon', ph:'blob' }];
     if (items.length) document.getElementById('issue').textContent = `No. ${items[0].no}${items[0].date ? ' · ' + fmt(items[0].date) : ''}`;
     grid.innerHTML = '';
     list.forEach((p, i) => {
       const a = document.createElement(p.slug ? 'a' : 'div');
-      a.className = 'card'; if (p.slug) a.href = `/${p.slug}/`;
+      a.className = p.slug ? 'card' : 'card ph-card'; if (p.slug) a.href = `/${p.slug}/`;
       const kind = p.ph || PH[i % 3];
       const n = kind === 'bars' ? 9 : kind === 'orbit' ? 8 : 0;
       const ph = kind === 'blob' ? '<span></span>' : Array.from({length:n},(_,k)=>`<i style="--i:${k}"></i>`).join('');
@@ -162,8 +164,8 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--amber)}
     else {
       if (coarse && !touching) { // drift near midline, following scroll
         const t = now / 1000, s = scrollY;
-        tx = innerWidth/2 + Math.sin(t*.35 + s*.004) * innerWidth*.28;
-        ty = innerHeight/2 + Math.sin(t*.27 + s*.006) * innerHeight*.08;
+        tx = innerWidth/2 + Math.sin(t*2*Math.PI/14 + s*.0012) * innerWidth*.28;
+        ty = innerHeight/2 + Math.sin(t*2*Math.PI/19 + s*.0015) * innerHeight*.08;
       }
       vx += (K*(tx-x) - C*vx) * dt; vy += (K*(ty-y) - C*vy) * dt;
       x += vx*dt; y += vy*dt;
