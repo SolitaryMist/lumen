@@ -188,7 +188,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
 
   // spring (stiffness 120, damping 20, mass 1)
   const mobile = matchMedia('(pointer: coarse), (max-width: 760px)').matches;
-  const RMAX = mobile ? Math.min(200, innerWidth * .55) : 320;
+  const RMAX = mobile ? Math.min(120, innerWidth * .28) : 320;
   // cubic-bezier(0.65,0,0.35,1) solver
   const bez = (x1,y1,x2,y2) => t => { const B=(a,b,u)=>3*a*u*(1-u)*(1-u)+3*b*u*u*(1-u)+u*u*u; let lo=0,hi=1,u=t; for(let i=0;i<24;i++){u=(lo+hi)/2; B(x1,x2,u)<t?lo=u:hi=u;} return B(y1,y2,u); };
   const sweepEase = bez(.65,0,.35,1); let sweepStart = performance.now() + 400, sweeping = mobile && !reduce;
@@ -210,10 +210,11 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
         const hx = hero.x - scrollX, w = hero.w;
         x = tx = hx - RMAX*.3 + e * (w + RMAX*.6); y = ty = hero.y - scrollY + hero.h/2; vx = vy = 0;
         if (k >= 1) { sweeping = false; driftT0 = now; }
-      } else if (mobile && !touching) { // drift near midline, following scroll
-        const t = (now - driftT0) / 1000 + 3.5, s = scrollY;
-        tx = innerWidth/2 + Math.sin(t*2*Math.PI/14 + s*.0012) * innerWidth*.28;
-        ty = innerHeight/2 + Math.sin(t*2*Math.PI/19 + s*.0015) * innerHeight*.08;
+      } else if (mobile && !touching) { // drift locked to the wordmark band: 7s ping-pong across the word
+        const p = ((now - driftT0) / 7000) % 1, e = sweepEase(p < .5 ? p*2 : 2 - p*2);
+        const hx = hero.x - scrollX, cy = hero.y - scrollY + hero.h/2;
+        tx = hx + e * hero.w;
+        ty = cy + Math.sin((now - driftT0) / 1000 * 2*Math.PI / 5.3) * hero.h * .15;
       }
       vx += (K*(tx-x) - C*vx) * dt; vy += (K*(ty-y) - C*vy) * dt;
       x += vx*dt; y += vy*dt;
