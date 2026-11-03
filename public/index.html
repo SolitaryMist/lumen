@@ -77,9 +77,10 @@ footer nav{display:flex;gap:24px}
 footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
 
 @media (pointer:coarse),(max-width:760px){
-  :root{--rmax:min(200px,55vw)}
+  :root{--rmax:28vw}
+  .word{font-size:28vw}
   .hero-lit{color:#fff;-webkit-mask:radial-gradient(circle var(--r) at calc(var(--x) - var(--hx,0px)) calc(var(--y) - var(--hy,0px)),#000 0,#000 55%,transparent 100%);mask:radial-gradient(circle var(--r) at calc(var(--x) - var(--hx,0px)) calc(var(--y) - var(--hy,0px)),#000 0,#000 55%,transparent 100%)}
-  .glow{background:radial-gradient(circle var(--r) at var(--x) var(--y),rgba(255,181,71,0) 0%,rgba(255,181,71,0) 45%,rgba(255,181,71,.22) 60%,transparent 100%)}
+  .glow{background:radial-gradient(circle var(--r) at var(--x) var(--y),rgba(255,181,71,.22) 0%,rgba(255,181,71,.08) 60%,rgba(255,181,71,0) 100%)}
 }
 @media (max-width:760px){.grid{grid-template-columns:1fr}.card{aspect-ratio:4/3}}
 @media (prefers-reduced-motion:reduce){
@@ -201,7 +202,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  setTimeout(() => body.classList.remove('intro'), 1600); root.style.setProperty('--r', getComputedStyle(root).getPropertyValue('--rmax').includes('min') ? Math.min(200, innerWidth*.55)+'px' : '320px');
+  setTimeout(() => body.classList.remove('intro'), 1600); root.style.setProperty('--r', getComputedStyle(root).getPropertyValue('--rmax').includes('min') ? innerWidth*.28+'px' : '320px');
   // keep --r at 320 after intro (animation fills until then)
 
   fetch('/pieces.json').then(r => r.json()).then(render).catch(() => render([]));
