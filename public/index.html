@@ -211,7 +211,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
         x = tx = hx - RMAX*.3 + e * (w + RMAX*.6); y = ty = hero.y - scrollY + hero.h/2; vx = vy = 0;
         if (k >= 1) { sweeping = false; driftT0 = now; }
       } else if (mobile && !touching) { // drift locked to the wordmark band: 7s ping-pong across the word
-        const p = ((now - driftT0) / 7000) % 1, e = sweepEase(p < .5 ? p*2 : 2 - p*2);
+        const p = ((now - driftT0) / 7000 + .5) % 1, e = sweepEase(p < .5 ? p*2 : 2 - p*2);
         const hx = hero.x - scrollX, cy = hero.y - scrollY + hero.h/2;
         tx = hx + e * hero.w;
         ty = cy + Math.sin((now - driftT0) / 1000 * 2*Math.PI / 5.3) * hero.h * .15;
