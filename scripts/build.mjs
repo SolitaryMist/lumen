@@ -10,7 +10,10 @@ for (const d of readdirSync('pieces', { withFileTypes: true })) {
   let meta = {};
   try { meta = JSON.parse(readFileSync(`pieces/${d.name}/meta.json`, 'utf8')); } catch {}
   cpSync(`pieces/${d.name}`, `${out}/${d.name}`, { recursive: true });
-  list.push({ slug: d.name, no: d.name.slice(0, 3), title: meta.title || d.name.slice(4).replace(/-/g, ' '), date: meta.date || '', tags: meta.tags || [] });
+  const code = {};
+  const pick = (k, dir, re) => { const dd = `pieces/${d.name}${dir}`; if (!existsSync(dd)) return; const f = readdirSync(dd).find(n => re.test(n)); if (f) code[k] = `/${d.name}${dir}/${f}`; };
+  pick('web', '', /^index\.html$/); pick('swiftui', '/swiftui', /\.swift$/); pick('compose', '/android', /\.kt$/);
+  list.push({ code, slug: d.name, no: d.name.slice(0, 3), title: meta.title || d.name.slice(4).replace(/-/g, ' '), date: meta.date || '', tags: meta.tags || [] });
 }
 list.sort((a, b) => b.slug.localeCompare(a.slug));
 writeFileSync(`${out}/pieces.json`, JSON.stringify(list, null, 2));
