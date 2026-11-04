@@ -87,7 +87,7 @@ main{position:relative;z-index:1;padding:0 clamp(20px,5vw,72px) 120px;max-width:
 @keyframes shake{25%{translate:-4px}50%{translate:4px}75%{translate:-4px}100%{translate:0}}
 .sub-row input{flex:1;min-width:0;height:100%;background:none;border:0;outline:0;color:var(--fg);font:400 16px/1 Geist,Inter,system-ui,sans-serif;letter-spacing:-.02em}
 .sub-row input::placeholder{color:var(--dim)}
-.sub-row button{background:none;border:0;color:var(--fg);font:600 15px/1 inherit;letter-spacing:-.02em;cursor:pointer;white-space:nowrap}
+.sub-row button{background:none;border:0;color:var(--fg);font:600 15px/1 inherit;letter-spacing:-.02em;white-space:nowrap}
 .sub-row button i{display:inline-block;font-style:normal;transition:transform 200ms var(--ease)}
 .sub-row button:hover i{transform:translateX(4px)}
 .dots b{animation:blink 900ms infinite both}.dots b:nth-child(2){animation-delay:150ms}.dots b:nth-child(3){animation-delay:300ms}
@@ -113,6 +113,50 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
   .card{transition:none;opacity:1;transform:none}
   .ph *{animation:none!important}
 }
+
+/* expanded piece */
+.xv{position:fixed;inset:0;z-index:50;visibility:hidden}
+.xv.open{visibility:visible}
+.xv-bd{position:absolute;inset:0;background:rgba(6,6,7,.62);-webkit-backdrop-filter:blur(14px) saturate(.8);backdrop-filter:blur(14px) saturate(.8);opacity:0}
+.xv-p{position:absolute;inset:4vh 4vw;max-width:1360px;margin:0 auto;border-radius:20px;background:#0E0E10;overflow:hidden;will-change:clip-path;
+  box-shadow:0 0 0 1px rgba(255,255,255,.06),0 40px 120px -20px rgba(0,0,0,.8);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)}
+.xv-rim{position:absolute;inset:0;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,181,71,.55),0 0 40px rgba(255,181,71,.18);opacity:0;z-index:3}
+.xv-sw{position:absolute;left:0;top:0;width:40%;height:1px;background:linear-gradient(90deg,transparent,#FFB547 50%,transparent);box-shadow:0 0 12px 1px rgba(255,181,71,.7);opacity:0;z-index:4;pointer-events:none}
+.xv-sw.b{top:auto;bottom:0}
+.xv-pv{position:relative;background:#0B0B0C;min-height:0}
+.xv-pv iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.xv-side{display:flex;flex-direction:column;min-height:0;border-left:1px solid rgba(255,255,255,.06)}
+.xv-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:28px 28px 20px}
+.xv-hd h2{font-size:clamp(28px,3vw,44px);line-height:1;letter-spacing:-.045em;margin-top:8px}
+.xv-hd .no{color:var(--amber)}
+.xv-open{display:inline-block;margin-top:12px;transition:color 300ms var(--ease)}.xv-open:hover{color:var(--fg)}
+.xv-x{position:absolute;top:16px;right:16px;z-index:5;width:40px;height:40px;border-radius:50%;border:0;background:rgba(255,255,255,.06);color:var(--fg);display:grid;place-items:center;transition:background 300ms var(--ease),transform 300ms var(--ease)}
+.xv-x:hover{background:rgba(255,255,255,.12);transform:rotate(90deg)}
+.xv-x:focus-visible,.xv-tab:focus-visible,.xv-btn:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
+.xv-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 28px;border-bottom:1px solid rgba(255,255,255,.06)}
+.xv-tabs{position:relative;display:flex;gap:22px}
+.xv-tab{background:none;border:0;color:var(--dim);font:400 12px/1 "JetBrains Mono",ui-monospace,monospace;padding:14px 0;transition:color 200ms}
+.xv-tab[aria-selected=true]{color:var(--fg)}
+.xv-ink{position:absolute;left:0;bottom:-1px;height:1px;width:10px;background:var(--amber);box-shadow:0 0 8px rgba(255,181,71,.8);transform-origin:0 0;transition:transform 400ms var(--ease)}
+.xv-acts{display:flex;gap:6px}
+.xv-btn{background:none;border:1px solid rgba(255,255,255,.1);border-radius:999px;color:var(--fg);font:400 11px/1 "JetBrains Mono",ui-monospace,monospace;padding:7px 12px;transition:border-color 200ms,color 200ms;white-space:nowrap}
+.xv-btn:hover{border-color:rgba(255,181,71,.5)}.xv-btn.ok{color:var(--amber);border-color:rgba(255,181,71,.5)}
+.xv-code{flex:1;min-height:0;overflow:auto;padding:16px 0 28px;font:400 12.5px/1.7 "JetBrains Mono",ui-monospace,monospace;letter-spacing:0;color:#C9C9C9;tab-size:2;overscroll-behavior:contain}
+.xv-code pre{counter-reset:l;min-width:max-content;padding-right:28px}
+.xv-code .l{display:block;counter-increment:l;padding-left:68px;position:relative;white-space:pre}
+.xv-code .l::before{content:counter(l);position:absolute;left:0;width:44px;text-align:right;color:#3A3A3D}
+.xv-code .l:hover{background:rgba(255,255,255,.02)}
+.t-c{color:#5C5C60;font-style:italic}.t-s{color:#E6C08A}.t-k{color:#FFB547}.t-n{color:#F0A17A}.t-t{color:#9FB7C9}.t-f{color:#EDEDED}
+.xv-msg{padding:16px 28px;color:var(--dim)}
+.xv .st{opacity:0}
+@media (max-width:760px){
+  .xv-p{inset:5vh 0 0;border-radius:20px 20px 0 0;grid-template-columns:1fr;grid-template-rows:42vh auto;overflow-y:auto;overscroll-behavior:contain;display:block}
+  .xv-pv{height:42vh}
+  .xv-side{border-left:0;border-top:1px solid rgba(255,255,255,.06)}
+  .xv-hd{padding:22px 20px 16px}.xv-bar{padding:0 20px;flex-wrap:wrap}.xv-acts{padding-bottom:10px}
+  .xv-code{max-height:60vh;font-size:11.5px}.xv-code .l{padding-left:52px}.xv-code .l::before{width:32px}
+  .xv-p::before{content:"";position:absolute;top:8px;left:50%;width:36px;height:4px;margin-left:-18px;border-radius:2px;background:rgba(255,255,255,.25);z-index:5}
+}
 </style>
 </head>
 <body class="intro">
@@ -135,6 +179,22 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
   <span>Built by <a href="https://x.com/aldininin">@aldininin</a></span>
   <nav class="mono"><a href="https://github.com/SolitaryMist/lumen">GitHub</a><a href="https://x.com/aldininin">X</a></nav>
 </footer>
+<div class="xv" id="xv" aria-hidden="true">
+  <div class="xv-bd" id="xvbd"></div>
+  <div class="xv-p" id="xvp" role="dialog" aria-modal="true" aria-labelledby="xvt">
+    <div class="xv-rim" id="xvrim"></div><div class="xv-sw" id="xvsw"></div><div class="xv-sw b" id="xvsw2"></div>
+    <button class="xv-x" id="xvx" aria-label="Close"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 1l12 12M13 1L1 13"/></svg></button>
+    <div class="xv-pv st" id="xvpv"></div>
+    <div class="xv-side">
+      <div class="xv-hd st"><div><span class="mono no" id="xvno"></span><h2 id="xvt"></h2><a class="mono xv-open" id="xvopen" href="#">Open full screen ↗</a></div></div>
+      <div class="xv-bar st">
+        <div class="xv-tabs" role="tablist" id="xvtabs"><button class="xv-tab" role="tab" data-k="web">Web</button><button class="xv-tab" role="tab" data-k="swiftui">SwiftUI</button><button class="xv-tab" role="tab" data-k="compose">Compose</button><i class="xv-ink" id="xvink"></i></div>
+        <div class="xv-acts"><a class="xv-btn" id="xvgh" target="_blank" rel="noopener">GitHub ↗</a><button class="xv-btn" id="xvcp">Copy</button></div>
+      </div>
+      <div class="xv-code st" id="xvcode" role="tabpanel" tabindex="0"></div>
+    </div>
+  </div>
+</div>
 <script>
 (() => {
   const root = document.documentElement, body = document.body;
@@ -254,6 +314,122 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
   const tick=()=>{const b=row.getBoundingClientRect(),x=parseFloat(rs.getPropertyValue('--x')),y=parseFloat(rs.getPropertyValue('--y'));
     if(b.bottom>0&&b.top<innerHeight&&!isNaN(x)){const d=Math.hypot(x-(b.left+b.width/2),y-b.bottom),k=Math.max(0,1-d/360),v=Math.round(42+k*(107-42)).toString(16).padStart(2,'0');row.style.setProperty('--line','#'+v+v+v)}
     requestAnimationFrame(tick)};requestAnimationFrame(tick);
+})();
+</script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const xv=$('xv'), bd=$('xvbd'), P=$('xvp'), code=$('xvcode'), cp=$('xvcp'), gh=$('xvgh'), ink=$('xvink');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const EASE = 'cubic-bezier(.2,.9,.1,1)', DUR = 680, REPO = 'https://github.com/SolitaryMist/lumen/blob/main/pieces';
+  let data = {}, cur = null, card = null, tab = 'web', src = '', busy = false, cache = {};
+  fetch('/pieces.json').then(r => r.json()).then(l => l.forEach(p => data[p.slug] = p)).catch(() => {});
+
+  // tiny highlighter
+  const KW = new Set('import export from const let var function return if else for while switch case break continue new class struct enum extends implements this self super true false null nil try catch throw await async val fun object private public internal override static some func guard in is as typealias protocol extension inout where defer when typeof of default do mutating lazy weak init deinit get set data sealed open companion'.split(' '));
+  const RX = /(<!--[\s\S]*?-->|\/\*[\s\S]*?\*\/|\/\/[^\n]*)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|(<\/?[a-zA-Z][\w-]*|\/?>)|(@[A-Za-z]\w*|\b[A-Za-z_]\w*\b)|(#[0-9a-fA-F]{3,8}\b|\b\d+(?:\.\d+)?(?:px|ms|s|f|dp|vh|vw|%)?\b)/g;
+  const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  function hl(s) {
+    const lines = ['']; let i = 0, m;
+    const put = (t, c) => t.split('\n').forEach((seg, j) => { if (j) lines.push(''); if (seg) lines[lines.length-1] += c ? `<span class="${c}">${esc(seg)}</span>` : esc(seg); });
+    RX.lastIndex = 0;
+    while ((m = RX.exec(s))) {
+      put(s.slice(i, m.index)); i = RX.lastIndex;
+      const w = m[4];
+      put(m[0], m[1] ? 't-c' : m[2] ? 't-s' : m[3] ? 't-t' : m[5] ? 't-n' : w && (KW.has(w) || w[0] === '@') ? 't-k' : w && /^[A-Z]/.test(w) ? 't-f' : '');
+    }
+    put(s.slice(i));
+    return '<pre>' + lines.map(l => `<span class="l">${l || ' '}</span>`).join('') + '</pre>';
+  }
+
+  function moveInk() { const b = $('xvtabs').querySelector(`[data-k="${tab}"]`); if (!b) return; ink.style.transform = `translateX(${b.offsetLeft}px) scaleX(${b.offsetWidth / 10})`; }
+  async function show(k) {
+    tab = k; [...$('xvtabs').querySelectorAll('.xv-tab')].forEach(b => { const on = b.dataset.k === k; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
+    moveInk(); cp.textContent = 'Copy'; cp.classList.remove('ok');
+    const path = cur.code && cur.code[k];
+    if (!path) { src = ''; code.innerHTML = '<p class="xv-msg mono">Not available for this piece.</p>'; gh.hidden = true; return; }
+    gh.hidden = false; gh.href = REPO + path.replace(/^\/[^/]+/, '/' + cur.slug);
+    code.innerHTML = '<p class="xv-msg mono">Loading…</p>';
+    try { src = cache[path] ??= await (await fetch(path)).text(); } catch { code.innerHTML = '<p class="xv-msg mono">Could not load source.</p>'; return; }
+    if (tab !== k) return;
+    code.innerHTML = hl(src); code.scrollTop = 0; code.scrollLeft = 0;
+  }
+  $('xvtabs').addEventListener('click', e => { const b = e.target.closest('.xv-tab'); if (b) show(b.dataset.k); });
+  $('xvtabs').addEventListener('keydown', e => { if (!/Arrow(Left|Right)/.test(e.key)) return; const ks = ['web','swiftui','compose'], n = ks[(ks.indexOf(tab) + (e.key === 'ArrowRight' ? 1 : 2)) % 3]; show(n); $('xvtabs').querySelector(`[data-k="${n}"]`).focus(); });
+  cp.addEventListener('click', async () => {
+    if (!src) return;
+    try { await navigator.clipboard.writeText(src); } catch { const t = document.createElement('textarea'); t.value = src; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+    cp.textContent = 'Copied ✓'; cp.classList.add('ok'); clearTimeout(cp._t); cp._t = setTimeout(() => { cp.textContent = 'Copy'; cp.classList.remove('ok'); }, 1600);
+  });
+
+  const flip = () => { const c = card.getBoundingClientRect(), p = P.getBoundingClientRect();
+    return `inset(${c.top - p.top}px ${p.right - c.right}px ${p.bottom - c.bottom}px ${c.left - p.left}px round 14px)`; };
+  const FULL = () => `inset(0px 0px 0px 0px round ${getComputedStyle(P).borderTopLeftRadius})`;
+  const stag = () => [...xv.querySelectorAll('.st')];
+
+  function open(slug, el) {
+    if (busy || cur) return; cur = data[slug]; if (!cur) return location.assign(`/${slug}/`);
+    card = el; busy = true;
+    $('xvno').textContent = `No. ${cur.no}`; $('xvt').textContent = cur.title; $('xvopen').href = `/${slug}/`;
+    $('xvpv').innerHTML = `<iframe src="/${slug}/" title="${cur.title} live preview"></iframe>`;
+    document.documentElement.style.overflow = 'hidden';
+    xv.classList.add('open'); xv.setAttribute('aria-hidden', 'false'); P.scrollTop = 0;
+    history.pushState({ lumen: slug }, '', `#${slug}`);
+    show(cur.code && cur.code.web ? 'web' : 'swiftui');
+    const done = () => { busy = false; $('xvx').focus({ preventScroll: true }); };
+    if (reduce) { bd.style.opacity = 1; stag().forEach(e => e.style.opacity = 1); return done(); }
+    card.style.visibility = 'hidden';
+    bd.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, easing: 'ease-out', fill: 'forwards' });
+    P.animate([{ clipPath: flip() }, { clipPath: FULL() }], { duration: DUR, easing: EASE }).finished.then(done, done);
+    stag().forEach((e, i) => e.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }], { duration: 560, delay: 260 + i * 70, easing: EASE, fill: 'forwards' }));
+    $('xvrim').animate([{ opacity: 0 }, { opacity: 1, offset: .35 }, { opacity: 0 }], { duration: 1300, delay: 300, easing: 'ease-out' });
+    [$('xvsw'), $('xvsw2')].forEach((s, i) => s.animate([{ opacity: 0, transform: i ? 'translateX(250%)' : 'translateX(-100%)' }, { opacity: 1, offset: .2 }, { opacity: 0, transform: i ? 'translateX(-100%)' : 'translateX(250%)' }], { duration: 1100, delay: 380 + i * 80, easing: 'cubic-bezier(.65,0,.35,1)' }));
+  }
+
+  function close(fromPop) {
+    if (!cur || busy) return;
+    if (!fromPop && history.state && history.state.lumen) return history.back(); // popstate calls close(true)
+    busy = true;
+    const end = () => {
+      xv.classList.remove('open'); xv.setAttribute('aria-hidden', 'true');
+      P.getAnimations().forEach(a => a.cancel()); bd.getAnimations().forEach(a => a.cancel()); stag().forEach(e => { e.getAnimations().forEach(a => a.cancel()); e.style.opacity = ''; });
+      bd.style.opacity = ''; P.style.transform = ''; $('xvpv').innerHTML = ''; code.innerHTML = '';
+      document.documentElement.style.overflow = '';
+      if (card) { card.style.visibility = ''; card.focus({ preventScroll: true }); }
+      cur = card = null; busy = false;
+    };
+    if (reduce || !card) return end();
+    stag().forEach(e => e.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' }));
+    bd.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: 100, easing: 'ease-in', fill: 'forwards' });
+    P.style.transform = ''; P.animate([{ clipPath: FULL() }, { clipPath: flip() }], { duration: 560, delay: 60, easing: EASE, fill: 'forwards' }).finished.then(end, end);
+  }
+
+  $('grid').addEventListener('click', e => {
+    const a = e.target.closest('a.card'); if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    e.preventDefault(); open(a.getAttribute('href').replace(/\//g, ''), a);
+  });
+  $('xvx').addEventListener('click', () => close());
+  bd.addEventListener('click', () => close());
+  addEventListener('popstate', () => { if (cur) close(true); });
+  addEventListener('resize', () => cur && moveInk());
+  document.addEventListener('keydown', e => {
+    if (!cur) return;
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    if (e.key === 'Tab') { // focus trap
+      const f = [...P.querySelectorAll('button,a[href],[tabindex="0"]')].filter(n => !n.hidden && n.offsetParent && n.tabIndex >= 0);
+      if (!f.length) return; const a = f[0], z = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+      else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+      else if (!P.contains(document.activeElement)) { e.preventDefault(); a.focus(); }
+    }
+  });
+  // mobile swipe-down to dismiss (from the top of the sheet)
+  let sy = null, dy = 0;
+  P.addEventListener('touchstart', e => { sy = (P.scrollTop <= 0 && !code.contains(e.target)) ? e.touches[0].clientY : null; dy = 0; }, { passive: true });
+  P.addEventListener('touchmove', e => { if (sy == null || busy) return; dy = Math.max(0, e.touches[0].clientY - sy); P.style.transform = `translateY(${dy}px)`; }, { passive: true });
+  P.addEventListener('touchend', () => { if (sy == null) return; sy = null; if (dy > 110) close(); else if (dy) { P.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 300, easing: EASE }); P.style.transform = ''; } });
+  // deep link
+  addEventListener('load', () => { const s = location.hash.slice(1); if (!s) return; const t = setInterval(() => { const a = document.querySelector(`a.card[href="/${s}/"]`); if (a && data[s]) { clearInterval(t); history.replaceState(null, '', location.pathname); open(s, a); } }, 100); setTimeout(() => clearInterval(t), 4000); });
 })();
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
