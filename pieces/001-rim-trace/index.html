@@ -28,10 +28,10 @@ html,body{height:100%;background:var(--bg);color:var(--fg);
   font:600 15px/1.4 Geist,ui-sans-serif,system-ui,sans-serif;
   letter-spacing:-.04em;-webkit-font-smoothing:antialiased;overflow:hidden}
 a{color:inherit;text-decoration:none}
-.gh{position:fixed;top:20px;right:24px;z-index:5;
-  font:400 12px/1 "JetBrains Mono",ui-monospace,monospace;letter-spacing:0;color:var(--dim);
-  transition:color 280ms var(--ease-out)}
-.gh:hover{color:var(--fg)}
+.links{position:fixed;top:20px;right:24px;z-index:5;display:flex;gap:16px;
+  font:400 12px/1 "JetBrains Mono",ui-monospace,monospace;letter-spacing:0}
+.links a{color:var(--dim);transition:color 280ms var(--ease-out)}
+.links a:hover{color:var(--fg)}
 .stage{min-height:100svh;display:grid;place-items:center;padding:24px}
 .card{
   --lift:0px; --seg:0.12; --peak:0.95;
@@ -61,7 +61,10 @@ a{color:inherit;text-decoration:none}
 </style>
 </head>
 <body>
-<a class="gh" href="https://github.com/SolitaryMist/lumen" target="_blank" rel="noopener">GitHub</a>
+<nav class="links" aria-label="Links">
+  <a href="https://github.com/SolitaryMist/lumen" target="_blank" rel="noopener">GitHub</a>
+  <a href="https://x.com/aldininin" target="_blank" rel="noopener">@aldininin</a>
+</nav>
 <div class="stage">
   <div class="card" id="card" role="button" tabindex="0" aria-label="Rim Trace card">
     <svg class="rim" id="rim" aria-hidden="true">
