@@ -10,7 +10,7 @@ enum RimTraceParams {
     static let backMs: Double = 420
     static let pressMs: Double = 300
     static let releaseMs: Double = 280
-    static let segment: CGFloat = 0.18
+    static let segment: CGFloat = 0.12
     static let segmentPress: CGFloat = 0.28
     static let magnetPad: CGFloat = 48
     static let corner: CGFloat = 20

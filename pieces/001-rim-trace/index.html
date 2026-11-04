@@ -27,7 +27,7 @@ a{color:inherit;text-decoration:none}
 .gh:hover{color:var(--fg)}
 .stage{min-height:100svh;display:grid;place-items:center;padding:24px}
 .card{
-  --lift:0px; --seg:0.18; --peak:0.95;
+  --lift:0px; --seg:0.12; --peak:0.95;
   position:relative;width:min(360px,88vw);aspect-ratio:1/1.25;
   border-radius:20px;background:var(--card);
   box-shadow:inset 0 0 0 1.5px var(--stroke);
@@ -88,7 +88,7 @@ a{color:inherit;text-decoration:none}
   const BACK_MS = 420;
   const PRESS_MS = 300;
   const RELEASE_MS = 280;
-  const SEG = 0.18;
+  const SEG = 0.12;
   const SEG_PRESS = 0.28;
   const MAGNET_PAD = 48;
   const RADIUS = 20;
@@ -232,26 +232,26 @@ a{color:inherit;text-decoration:none}
     const offset = -start;
 
     // glow: slightly longer soft blob
-    const gLen = Math.min(perimeter * 0.42, len * 2.2);
+    const gLen = Math.min(perimeter * 0.22, len * 1.6);
     const gStart = ((center * perimeter - gLen / 2) % perimeter + perimeter) % perimeter;
     glowPath.style.strokeDasharray = `${gLen} ${Math.max(0, perimeter - gLen)}`;
     glowPath.style.strokeDashoffset = String(-gStart);
     glowPath.style.opacity = String(0.22 + (peak - PEAK) * 0.5);
 
     // fade wings (softer ends)
-    const aLen = len * 1.35;
+    const aLen = len * 1.55;
     const aStart = ((center * perimeter - aLen / 2) % perimeter + perimeter) % perimeter;
     fadePathA.style.strokeDasharray = `${aLen} ${Math.max(0, perimeter - aLen)}`;
     fadePathA.style.strokeDashoffset = String(-aStart);
     fadePathA.style.stroke = AMBER;
-    fadePathA.style.opacity = String(peak * 0.35);
+    fadePathA.style.opacity = String(peak * 0.22);
 
-    const bLen = len * 1.12;
+    const bLen = len * 1.28;
     const bStart = ((center * perimeter - bLen / 2) % perimeter + perimeter) % perimeter;
     fadePathB.style.strokeDasharray = `${bLen} ${Math.max(0, perimeter - bLen)}`;
     fadePathB.style.strokeDashoffset = String(-bStart);
     fadePathB.style.stroke = AMBER;
-    fadePathB.style.opacity = String(peak * 0.6);
+    fadePathB.style.opacity = String(peak * 0.45);
 
     corePath.style.strokeDasharray = `${len} ${Math.max(0, perimeter - len)}`;
     corePath.style.strokeDashoffset = String(offset);
@@ -301,7 +301,7 @@ a{color:inherit;text-decoration:none}
     }
     // full laps starting from 0.5 (seamless after intro)
     const u = ((now - tourEpoch) / TOUR_MS) % 1;
-    return (0.5 + easeSoft(u)) % 1;
+    return (0.5 + u) % 1;
   }
 
   // pointer
@@ -435,7 +435,7 @@ a{color:inherit;text-decoration:none}
         if (mode === 'back') {
           mode = 'tour';
           // re-sync tour epoch so tourProgressAt matches current progress
-          // We want (0.5 + easeSoft(u)) % 1 == progress, with u=0 at tourEpoch
+          // handoff: continue linearly from current progress
           // Set tourEpoch so current progress continues seamlessly going forward via tour
           tourEpoch = now;
           // Store offset: tour base is progress at handoff
@@ -446,13 +446,7 @@ a{color:inherit;text-decoration:none}
     } else if (mode === 'intro' || mode === 'tour') {
       if (useTourBase) {
         const u = ((now - tourEpoch) / TOUR_MS) % 1;
-        // advance from tourBase along eased full lap
-        // Map: over one TOUR_MS, progress advances +1 with easeSoft
-        // Use derivative-friendly approach: linear time wrapped, ease within cycle from base
-        const prevU = (((now - tourEpoch - dt * 1000) / TOUR_MS) % 1 + 1) % 1;
-        // simpler: progress = (tourBase + easeSoft(u)) % 1 but easeSoft(0)=0 so starts at base — good
-        // but easeSoft is not linear so speed varies within lap — matches spec
-        progress = (tourBase + easeSoft(u)) % 1;
+        progress = (tourBase + u) % 1;
       } else {
         progress = tourProgressAt(now);
       }

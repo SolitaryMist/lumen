@@ -58,7 +58,7 @@ object RimTraceParams {
     const val BACK_MS = 420
     const val PRESS_MS = 300
     const val RELEASE_MS = 280
-    const val SEGMENT = 0.18f
+    const val SEGMENT = 0.12f
     const val SEGMENT_PRESS = 0.28f
     const val MAGNET_PAD = 48f
     const val CORNER = 20f
