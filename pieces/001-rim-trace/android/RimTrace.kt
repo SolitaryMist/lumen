@@ -137,8 +137,7 @@ fun RimTraceScreen(
                     } else e * 0.5f
                 } else {
                     val u = ((elapsedMs / RimTraceParams.TOUR_MS) % 1.0).toFloat()
-                    val e = RimTraceParams.EaseSoft.transform(u)
-                    ((tourBase + e) % 1f + 1f) % 1f
+                    ((tourBase + u) % 1f + 1f) % 1f
                 }
                 // Only snap when not animating magnet/back
                 if (!magnetizing) {
@@ -163,8 +162,7 @@ fun RimTraceScreen(
                     } else e * 0.5f
                 } else {
                     val u = ((elapsedMs / RimTraceParams.TOUR_MS) % 1.0).toFloat()
-                    val e = RimTraceParams.EaseSoft.transform(u)
-                    ((tourBase + e) % 1f + 1f) % 1f
+                    ((tourBase + u) % 1f + 1f) % 1f
                 }
                 progress.snapTo(p)
             }
@@ -270,7 +268,7 @@ fun RimTraceScreen(
                         val len = segFrac * perim
                         val start = ((center * perim - len / 2f) % perim + perim) % perim
                         // glow blob
-                        val gLen = min(perim * 0.42f, len * 2.2f)
+                        val gLen = min(perim * 0.22f, len * 1.6f)
                         val gStart = ((center * perim - gLen / 2f) % perim + perim) % perim
                         val glow = Path()
                         measure.getSegment(gStart, gStart + gLen, glow, true)

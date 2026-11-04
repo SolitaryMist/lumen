@@ -190,8 +190,8 @@ struct RimTraceView: View {
             return CGFloat(e * 0.5)
         }
         let u = (elapsed / RimTraceParams.tourMs).truncatingRemainder(dividingBy: 1)
-        let e = cubicBezierSoft(u < 0 ? u + 1 : u)
-        return CGFloat((Double(tourBase) + e).truncatingRemainder(dividingBy: 1))
+        let uu = u < 0 ? u + 1 : u
+        return CGFloat((Double(tourBase) + uu).truncatingRemainder(dividingBy: 1))
     }
 
     private func nearestProgress(local: CGPoint, size: CGSize) -> CGFloat {
@@ -278,9 +278,9 @@ struct RimLightCanvas: View {
             }
 
             // outer soft glow ~12px
-            drawSegment(frac: min(0.42, segment * 2.2), width: 14, alpha: 0.22 * peak / 0.95, blur: 8)
+            drawSegment(frac: min(0.22, segment * 1.6), width: 14, alpha: 0.22 * peak / 0.95, blur: 8)
             // falloff wing
-            drawSegment(frac: segment * 1.35, width: RimTraceParams.stroke, alpha: 0.35 * peak, blur: 0)
+            drawSegment(frac: segment * 1.55, width: RimTraceParams.stroke, alpha: 0.22 * peak, blur: 0)
             // core
             drawSegment(frac: segment, width: RimTraceParams.stroke, alpha: peak, blur: 0)
         }
