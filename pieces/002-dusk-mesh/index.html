@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dusk — Lumen 002</title>
+<meta property="og:title" content="Dusk — Lumen 002">
+<meta property="og:description" content="A mesh gradient that breathes. Motion study by @aldininin.">
+<meta property="og:image" content="https://lumen-motion.vercel.app/002-dusk-mesh/og.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lumen-motion.vercel.app/002-dusk-mesh/og.png">
+<meta name="description" content="Dusk — the last ten minutes of sky after sunset, as a breathing 3×3 mesh gradient. Lumen 002 by @aldininin.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0E0F13; --fg:#EDEBE6; --dim:#8A8B93;
+  --ease:cubic-bezier(0.22,1,0.36,1);
+  --m:48px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;
+  font:600 15px/1.4 Geist,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+#stage{position:fixed;inset:0;touch-action:none;z-index:0}
+#gl,#fallback{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0}
+#fallback{display:none}
+.grain{position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.03;
+  background:url(grain.png) repeat;background-size:256px 256px;image-rendering:pixelated}
+.links{position:fixed;left:var(--m);top:20px;z-index:3;display:flex;gap:16px;
+  font:400 12px/1 "JetBrains Mono",ui-monospace,monospace;opacity:.6}
+.links a{color:var(--dim);transition:color 280ms var(--ease)}
+.links a:hover{color:var(--fg)}
+.hint{position:fixed;top:20px;right:var(--m);z-index:2;pointer-events:none;
+  font:400 13px/1 Geist,ui-sans-serif,system-ui,sans-serif;color:var(--dim);transition:opacity 300ms var(--ease)}
+.hint.gone{opacity:0!important}
+.text{position:fixed;left:var(--m);bottom:var(--m);z-index:2;pointer-events:none}
+.text>*{display:block;opacity:0;transform:translateY(4px)}
+.no{font-size:13px;color:var(--dim);font-weight:400}
+.title{font-size:96px;line-height:.95;letter-spacing:-.04em;color:var(--fg);margin:6px 0 10px}
+.sub{font-size:15px;color:var(--dim);font-weight:400}
+.in{animation:rise 300ms var(--ease) both}
+@keyframes rise{to{opacity:1;transform:none}}
+@media (max-width:760px){:root{--m:24px}.title{font-size:18vw}}
+@media (prefers-reduced-motion:reduce){.text>*,.hint{opacity:1;transform:none;animation:none}}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="gl"></canvas><div id="fallback"></div></div>
+<div class="grain" aria-hidden="true"></div>
+<nav class="links" aria-label="Links">
+  <a href="https://github.com/SolitaryMist/lumen" target="_blank" rel="noopener">GitHub</a>
+  <a href="https://x.com/aldininin" target="_blank" rel="noopener">@aldininin</a>
+</nav>
+<div class="hint" id="hint">drag to shift the light</div>
+<div class="text" id="text">
+  <span class="no">002</span>
+  <span class="title">Dusk</span>
+  <span class="sub">A mesh gradient that breathes.</span>
+</div>
+<script>
+// ===== Shared parameters (mirrored in DuskMeshView.swift and DuskMesh.kt) =====
+const P = {
+  bg: '#0E0F13',
+  colors: [ // 3×3, row by row, top → bottom
+    '#1B1E3A', '#2A2550', '#1B1E3A',
+    '#3A2E5C', '#C9744A', '#2B4A5E',
+    '#2B4A5E', '#E8B27A', '#3A2E5C'],
+  driftAmp: 0.06,                              // × short side
+  periods: [14000, 16000, 18000, 20000, 22000], // ms: center, top, left, right, bottom
+  dragMax: 0.12,                               // × short side
+  spring: { stiffness: 120, damping: 20, mass: 1 },
+  pressLift: 0.06,                             // center luminance +6%
+  pressIn: 200, pressOut: 300,                 // ms
+  intro: 1200, textDelay: 400, textStagger: 60, // ms
+  satFrom: 0.4,
+  portraitCenterY: 0.45,
+  renderScale: 0.5,
+};
+const INNER = [4, 1, 3, 5, 7]; // grid indices of the 5 moving points
+const ease = t => { // cubic-bezier(0.22,1,0.36,1)
+  const x1=.22,y1=1,x2=.36,y2=1; let u=t;
+  for (let i=0;i<8;i++){const x=3*(1-u)*(1-u)*u*x1+3*(1-u)*u*u*x2+u*u*u-t;const d=3*(1-u)*(1-u)*x1+6*(1-u)*u*(x2-x1)+3*u*u*(1-x2);if(Math.abs(d)<1e-6)break;u-=x/d;u=Math.min(1,Math.max(0,u));}
+  return 3*(1-u)*(1-u)*u*y1+3*(1-u)*u*u*y2+u*u*u;
+};
+const hex = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16)/255);
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const phase = INNER.map(() => Math.random()*Math.PI*2);
+const stage = document.getElementById('stage'), cv = document.getElementById('gl');
+const hint = document.getElementById('hint');
+
+let W=0,H=0,S=0;
+// spring state for center offset (px)
+const sp = {x:0,y:0,vx:0,vy:0,tx:0,ty:0};
+let press=0, pressFrom=0, pressTo=0, pressT0=0, pressDur=1;
+let dragging=false, origin=null;
+
+function basePoints(){
+  const cy = H>W ? P.portraitCenterY : 0.5;
+  const ys=[0,cy,1], xs=[0,.5,1], pts=[];
+  for (let r=0;r<3;r++) for (let c=0;c<3;c++) pts.push([xs[c]*W, (r===1?ys[1]:ys[r])*H]);
+  return pts;
+}
+function points(t){
+  const pts = basePoints(), a = P.driftAmp*S;
+  if (!RM) INNER.forEach((idx,k)=>{
+    const w = 2*Math.PI*t/P.periods[k];
+    pts[idx][0] += a*Math.sin(w+phase[k]);
+    pts[idx][1] += a*Math.cos(w+phase[k]*1.7); // pure sine, same period
+  });
+  pts[4][0]+=sp.x; pts[4][1]+=sp.y;
+  return pts;
+}
+
+// ---------- WebGL ----------
+const gl = cv.getContext('webgl', {antialias:false, premultipliedAlpha:false});
+let prog, uP, uC, uRes, uSat, uLift;
+const FS = `precision highp float;
+uniform vec2 res; uniform vec2 pts[9]; uniform vec3 cols[9]; uniform float sat; uniform float lift;
+// Bicubic (Hermite) surface over the 3×3 mesh. The pixel's mesh coordinate is found by
+// inverting the displacement field (bicubic interpolation of point offsets), then colors are
+// interpolated bicubically on the regular parameter grid.
+vec2 base(int i){ float c=mod(float(i),3.0); float r=floor(float(i)/3.0); return vec2(c*0.5, r*0.5); }
+float h(float t){ return t*t*(3.0-2.0*t); }
+vec2 pAt(int i){ for(int k=0;k<9;k++){ if(k==i) return pts[k]; } return vec2(0); }
+vec3 cAt(int i){ for(int k=0;k<9;k++){ if(k==i) return cols[k]; } return vec3(0); }
+vec2 offAt(vec2 uv, vec2 bc){
+  // bilinear-Hermite over the 4 corners of the cell containing uv in base space
+  vec2 g=clamp(uv*2.0,0.0,1.999); vec2 cell=floor(g); vec2 f=g-cell;
+  int i0=int(cell.y)*3+int(cell.x);
+  vec2 o00=pAt(i0)-base(i0)*bc, o10=pAt(i0+1)-base(i0+1)*bc, o01=pAt(i0+3)-base(i0+3)*bc, o11=pAt(i0+4)-base(i0+4)*bc;
+  float hx=h(f.x), hy=h(f.y);
+  return mix(mix(o00,o10,hx),mix(o01,o11,hx),hy);
+}
+vec3 colAt(vec2 uv){
+  vec2 g=clamp(uv*2.0,0.0,1.999); vec2 cell=floor(g); vec2 f=g-cell;
+  int i0=int(cell.y)*3+int(cell.x);
+  float hx=h(f.x), hy=h(f.y);
+  return mix(mix(cAt(i0),cAt(i0+1),hx),mix(cAt(i0+3),cAt(i0+4),hx),hy);
+}
+void main(){
+  vec2 px=vec2(gl_FragCoord.x, res.y-gl_FragCoord.y)/res; // 0..1 screen
+  vec2 bc=vec2(1.0); // points come in normalized
+  vec2 uv=px;
+  for(int k=0;k<4;k++){ uv=px-offAt(uv,bc); } // fixed-point inversion
+  uv=clamp(uv,0.0,1.0);
+  vec3 c=colAt(uv);
+  // press: lift center contribution
+  vec2 d=(uv-vec2(0.5))*2.0; float wC=h(clamp(1.0-abs(d.x),0.0,1.0))*h(clamp(1.0-abs(d.y),0.0,1.0));
+  c*=1.0+lift*wC;
+  float l=dot(c,vec3(0.2126,0.7152,0.0722));
+  c=mix(vec3(l),c,sat);
+  gl_FragColor=vec4(c,1.0);
+}`;
+const VS = `attribute vec2 p; void main(){ gl_Position=vec4(p,0.0,1.0); }`;
+function initGL(){
+  if (!gl) return false;
+  const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o;};
+  try{
+    prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);gl.useProgram(prog);
+  }catch(e){ console.warn(e); return false; }
+  const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  uP=gl.getUniformLocation(prog,'pts');uC=gl.getUniformLocation(prog,'cols');uRes=gl.getUniformLocation(prog,'res');
+  uSat=gl.getUniformLocation(prog,'sat');uLift=gl.getUniformLocation(prog,'lift');
+  gl.uniform3fv(uC,new Float32Array(P.colors.flatMap(hex)));
+  return true;
+}
+const useGL = initGL();
+const fb = document.getElementById('fallback');
+if (!useGL){ cv.style.display='none'; fb.style.display='block'; }
+
+function resize(){
+  W=innerWidth;H=innerHeight;S=Math.min(W,H);
+  if (useGL){ cv.width=Math.max(1,Math.round(W*P.renderScale)); cv.height=Math.max(1,Math.round(H*P.renderScale)); gl.viewport(0,0,cv.width,cv.height); }
+}
+addEventListener('resize',resize); resize();
+
+function drawFallback(pts){ // 4 layered radial gradients, breathing only
+  const at=i=>`${(pts[i][0]/W*100).toFixed(2)}% ${(pts[i][1]/H*100).toFixed(2)}%`;
+  fb.style.background=[
+    `radial-gradient(circle at ${at(4)}, ${P.colors[4]} 0%, transparent 45%)`,
+    `radial-gradient(circle at ${at(7)}, ${P.colors[7]} 0%, transparent 40%)`,
+    `radial-gradient(circle at ${at(3)}, ${P.colors[3]} 0%, transparent 55%)`,
+    `radial-gradient(circle at ${at(1)}, ${P.colors[1]} 0%, transparent 60%)`,
+    P.colors[0]].join(',');
+}
+
+// ---------- intro ----------
+const t0 = performance.now();
+const layer = useGL ? cv : fb;
+if (RM){ layer.style.opacity=1; }
+else [...document.getElementById('text').children].forEach((el,i)=>{ el.style.animationDelay=(P.textDelay+i*P.textStagger)+'ms'; el.classList.add('in'); });
+hint.style.opacity = RM ? 1 : 0;
+if (!RM){ hint.style.transition='opacity 300ms var(--ease)'; setTimeout(()=>{ if(!hint.classList.contains('gone')) hint.style.opacity=1; }, P.textDelay+3*P.textStagger); }
+
+// ---------- input ----------
+function setPress(to,dur,now){ pressFrom=press; pressTo=to; pressT0=now; pressDur=dur; }
+function target(e){
+  const b=basePoints()[4], m=P.dragMax*S;
+  let dx=e.clientX-b[0], dy=e.clientY-b[1]; const L=Math.hypot(dx,dy);
+  if (L>m){ dx*=m/L; dy*=m/L; }
+  sp.tx=dx; sp.ty=dy;
+  if (RM){ sp.x=dx; sp.y=dy; sp.vx=sp.vy=0; }
+}
+let hintTimer=0;
+stage.addEventListener('pointerdown',e=>{
+  dragging=true; stage.setPointerCapture(e.pointerId); target(e); setPress(1,P.pressIn,performance.now());
+  if(!hintTimer) hintTimer=setTimeout(()=>hint.classList.add('gone'),300);
+});
+stage.addEventListener('pointermove',e=>{ if(dragging) target(e); });
+const up=()=>{ if(!dragging) return; dragging=false; sp.tx=0; sp.ty=0; if(RM){sp.x=sp.y=0;} setPress(0,P.pressOut,performance.now()); };
+stage.addEventListener('pointerup',up); stage.addEventListener('pointercancel',up);
+
+// ---------- loop ----------
+let last=performance.now(), raf=0;
+function frame(now){
+  const dt=Math.min(0.032,(now-last)/1000); last=now;
+  if (!RM){ // semi-implicit Euler spring on the offset; drift is added separately → no jump
+    const {stiffness:k,damping:c,mass:m}=P.spring;
+    for (let s=0;s<2;s++){ const h=dt/2;
+      sp.vx+=(-k*(sp.x-sp.tx)-c*sp.vx)/m*h; sp.vy+=(-k*(sp.y-sp.ty)-c*sp.vy)/m*h;
+      sp.x+=sp.vx*h; sp.y+=sp.vy*h; }
+  }
+  const pk=Math.min(1,(now-pressT0)/pressDur); press=pressFrom+(pressTo-pressFrom)*ease(pk);
+  const it=RM?1:ease(Math.min(1,(now-t0)/P.intro));
+  layer.style.opacity=it;
+  const sat=P.satFrom+(1-P.satFrom)*it;
+  const pts=points(now-t0);
+  if (useGL){
+    gl.uniform2f(uRes,cv.width,cv.height);
+    gl.uniform2fv(uP,new Float32Array(pts.flatMap(p=>[p[0]/W,p[1]/H])));
+    gl.uniform1f(uSat,sat); gl.uniform1f(uLift,P.pressLift*press);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  } else { fb.style.filter=`saturate(${sat})`; drawFallback(pts); }
+  raf=requestAnimationFrame(frame);
+}
+raf=requestAnimationFrame(frame);
+document.addEventListener('visibilitychange',()=>{
+  if (document.hidden) cancelAnimationFrame(raf);
+  else { last=performance.now(); raf=requestAnimationFrame(frame); }
+});
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
