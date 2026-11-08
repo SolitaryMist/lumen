@@ -5,7 +5,9 @@ import SwiftUI
 /* ===== Stack parameters (identical to web / Compose) =====
    CARDS 5 · 320x440 (r20) on wide screens · min(78% width, 320) at 8:11 (r18) on phones · padding 28
    DEPTH i: offsetY i*10 · scale 1-i*0.04 · darken 6%/level · opacity clamp(4-depth,0,1)
-   INTRO: deal bottom->top, stagger 70ms, 700ms, cubic-bezier(0.22,1,0.36,1), y+40, opacity 0->1
+   INTRO: deal bottom->top, stagger 70ms, 700ms position cubic-bezier(0.22,1,0.36,1) from y+40;
+          opacity 0->1 linear in the first 160ms only; nothing drawn until layout is ready
+   TICK: amber line only on the top card, fades in 200ms linear when a card becomes top
    DRAG: x 1:1, y*0.6, rot clamp(x*0.06, ±14)°, anchor (0.5, 1.2); card below lifts p*0.6, p=min(|x|/0.5W,1)
    FLING IF |x| > 0.35W or |vx| > 800 pt/s · FLING 360ms cubic-bezier(0.2,0.7,0.3,1) to ±(screen/2+W), ±24°
    SNAP spring k380 c30 (response 0.32 / dampingFraction 0.77) with release velocity
@@ -16,7 +18,7 @@ import SwiftUI
    ========================================================= */
 enum ST {
     static let dy: CGFloat = 10, ds: CGFloat = 0.04, shade = 0.06
-    static let introStagger = 0.070, introDur = 0.700, introY: CGFloat = 40
+    static let introStagger = 0.070, introDur = 0.700, introFade = 0.160, introY: CGFloat = 40, tickFade = 0.200
     static let yDamp: CGFloat = 0.6, rotPerPt: CGFloat = 0.06, rotMax: CGFloat = 14, lift: CGFloat = 0.6
     static let flingX: CGFloat = 0.35, flingV: CGFloat = 800
     static let flingDur = 0.360, flingRot: Double = 24
@@ -70,7 +72,7 @@ final class CardState {
     var mode: Mode = .rest
     var fling: (t0: Double, x0: Double, y0: Double, r0: Double, x1: Double, r1: Double)?
     var lin: (from: Double, to: Double, t0: Double)?
-    var introT0 = 0.0
+    var introT0 = 0.0, tickT0 = 0.0
     enum Mode { case rest, drag, spring, fling, hint }
 }
 
@@ -114,6 +116,7 @@ struct StackView: View {
             let now = Date.timeIntervalSinceReferenceDate
             started = now
             for (i, c) in cards.enumerated() { c.introT0 = now + Double(4 - i) * ST.introStagger }
+            cards[order[0]].tickT0 = cards[order[0]].introT0
             nextHint = now + 4 * ST.introStagger + ST.introDur + ST.hintIdle
         }
     }
@@ -137,6 +140,8 @@ struct StackView: View {
         let d = isFling ? 0 : c.depth.pos
         let ti = min(max((now - c.introT0) / ST.introDur, 0), 1)
         let ei = reduced ? ti : eIntro(ti)
+        let io = min(max((now - c.introT0) / ST.introFade, 0), 1)
+        let tickOp = (order[0] == item.id && !isFling) ? min(max((now - c.tickT0) / ST.tickFade, 0), 1) : 0
         var r = rot(c.x.pos); var op = 1.0; var x = c.x.pos; var y = c.y.pos
         let _ = {
             if let f = c.fling {
@@ -149,7 +154,7 @@ struct StackView: View {
             RoundedRectangle(cornerRadius: radius).fill(ST.face)
             RoundedRectangle(cornerRadius: radius).strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
             VStack(alignment: .leading, spacing: 0) {
-                Rectangle().fill(ST.amber).frame(width: 24, height: 2).opacity(min(max(1 - d, 0), 1)).padding(.bottom, 14)
+                Rectangle().fill(ST.amber).frame(width: 24, height: 2).opacity(tickOp).padding(.bottom, 14)
                 Text(String(format: "%02d", item.id + 1)).font(.custom("Inter Variable", size: 96).weight(.semibold))
                     .kerning(-0.04 * 96).foregroundStyle(ST.fg)
                 Spacer()
@@ -173,7 +178,7 @@ struct StackView: View {
         .scaleEffect(1 - d * ST.ds)
         .rotationEffect(.degrees(r), anchor: UnitPoint(x: 0.5, y: 1.2))
         .offset(x: x, y: d * ST.dy + y + (1 - ei) * ST.introY)
-        .opacity(op * min(max(4 - d, 0), 1) * ei)
+        .opacity(started == 0 ? 0 : op * min(max(4 - d, 0), 1) * io)
         .zIndex(isFling ? 200 : 100 - d * 10)
         .gesture(order[0] == item.id ? dragGesture(c, W: W, screenW: screenW) : nil)
         .onContinuousHover { phase in
@@ -220,6 +225,7 @@ struct StackView: View {
         c.mode = .fling
         c.fling = (now, c.x.pos, c.y.pos, rot(c.x.pos), dir * Double(screenW / 2 + W), dir * ST.flingRot)
         order.append(order.removeFirst())
+        cards[order[0]].tickT0 = now
         for (d, ci) in order.enumerated() where cards[ci].mode != .fling {
             let k = cards[ci]
             if k.depthTarget != Double(d) { k.depthTarget = Double(d); k.depthStart = now + (d < 4 ? Double(d) * ST.shiftStagger : 0)

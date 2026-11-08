@@ -22,7 +22,7 @@ a{color:inherit;text-decoration:none}
 .links{position:fixed;top:20px;right:24px;z-index:50;display:flex;gap:16px;font-size:12px;line-height:1;font-weight:400}
 .links a{color:var(--dim);transition:color 280ms cubic-bezier(0.22,1,0.36,1)}
 .links a:hover{color:var(--fg)}
-.stage{position:fixed;inset:0;touch-action:none;user-select:none;-webkit-user-select:none}
+.stage{position:fixed;inset:0;visibility:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
 .stack{position:absolute;left:50%;top:50%;width:min(78vw,320px);aspect-ratio:8/11;
   transform:translate(-50%,calc(-50% - 15px))}
 .card{position:absolute;inset:0;border-radius:18px;background:var(--face);border:1px solid rgba(255,255,255,0.06);
@@ -56,11 +56,13 @@ a{color:inherit;text-decoration:none}
    CARDS          5 · 320x440 desktop (r20) · min(78vw,320) at 8:11 mobile (r18) · padding 28
    STACK DEPTH i  translateY i*10px · scale 1-i*0.04 · face darkened 6% per level · depth 4 opacity 0
                   (opacity = clamp(4 - depth, 0, 1), so a card fades in as it rises from 4 to 3)
-   INTRO          deal bottom -> top, stagger 70ms, 700ms each, cubic-bezier(0.22,1,0.36,1), y+40 & opacity 0 -> rest
+   INTRO          deal bottom -> top, stagger 70ms, 700ms each: position y+40 -> rest with cubic-bezier(0.22,1,0.36,1);
+                  opacity 0 -> 1 linear in the first 160ms only. Stage hidden until fonts + layout are ready
+   TICK           amber line only on the top card; fades in 200ms linear when a card becomes top
    DRAG           x 1:1, y * 0.6, rotation = clamp(x * 0.06 deg/px, +-14 deg), origin 50% 120%
                   card below rises by p*0.6 depth, p = min(|x| / 0.5W, 1)
    FLING IF       |x| > 0.35W  or  |vx| > 800 px/s   (velocity: samples from the last 80ms)
-   FLING          360ms cubic-bezier(0.2,0.7,0.3,1) to x = +-(viewport/2 + W), rotate to +-24 deg, then depth 4
+   FLING          360ms cubic-bezier(0.2,0.7,0.3,1) to x = +-(viewport/2 + W), rotate to +-24 deg, then depth 4 (opacity 0)
    SNAP BACK      spring k380 c30 m1 (SwiftUI response 0.32 / dampingFraction 0.77), starts with release velocity
    STACK SHIFT    spring k260 c26 m1 (0.39 / 0.81), stagger 40ms per card
    TILT (hover)   rotateX/Y max 6 deg, perspective 1000px, spring k200 c24 m1 (0.44 / 0.85)
@@ -72,10 +74,10 @@ a{color:inherit;text-decoration:none}
    ============================================================= */
 const P = {
   dy:10, ds:0.04, shade:0.06,
-  introStagger:70, introDur:700, introY:40,
+  introStagger:70, introDur:700, introFade:160, introY:40, tickFade:200,
   yDamp:0.6, rotPerPx:0.06, rotMax:14, lift:0.6,
   flingX:0.35, flingV:800, velWindow:80,
-  flingDur:360, flingRot:24, fadeIn:240,
+  flingDur:360, flingRot:24,
   snap:{k:380,c:30}, shift:{k:260,c:26}, shiftStagger:40,
   tilt:{k:200,c:24}, tiltMax:6, perspective:1000,
   tapSlop:8,
@@ -113,7 +115,7 @@ const cards=DATA.map((d,i)=>{
   stackEl.appendChild(el);
   return {i,el,shadeEl:el.querySelector('.shade'),tickEl:el.querySelector('.tick'),
     depth:i,dv:0,dTarget:i,dStart:0,dSpring:P.shift,lin:null,
-    x:0,vx:0,y:0,vy:0,mode:'rest',fl:null,fade:1,fadeT0:0,op:1,
+    x:0,vx:0,y:0,vy:0,mode:'rest',fl:null,op:1,tickT0:0,
     tx:0,tvx:0,ty:0,tvy:0,ttx:0,tty:0, intro:0,introT0:0};
 });
 // titles/subtitles from each piece's meta.json (fallbacks above)
@@ -191,7 +193,7 @@ function fling(c,dir,vx){
   const now=performance.now();
   c.mode='fling'; c.fl={t0:now,x0:c.x,y0:c.y,r0:rotOf(c.x),x1:dir*(VW/2+W),r1:dir*P.flingRot};
   c.ttx=c.tty=0;
-  order.push(order.shift()); updateCount(); setDepthTargets(now);
+  order.push(order.shift()); cards[order[0]].tickT0=now; updateCount(); setDepthTargets(now);
 }
 function rotOf(x){ return clamp(x*P.rotPerPx,-P.rotMax,P.rotMax); }
 
@@ -208,7 +210,7 @@ function frame(now){
     hint={t0:now,c:top}; top.mode='hint'; }
   for(const c of cards){
     // intro
-    const ti=clamp((now-c.introT0)/P.introDur,0,1); const ei=reduced?ti:eIntro(ti);
+    const ti=clamp((now-c.introT0)/P.introDur,0,1); const ei=reduced?ti:eIntro(ti); const io=clamp((now-c.introT0)/P.introFade,0,1);
     // depth
     if(c.mode!=='fling'){
       if(c.lin){ const u=clamp((now-c.lin.t0)/c.lin.dur,0,1); c.depth=c.lin.from+(c.lin.to-c.lin.from)*u; if(u>=1)c.lin=null; }
@@ -221,7 +223,7 @@ function frame(now){
       const u=clamp((now-c.fl.t0)/(reduced?P.reducedDur:P.flingDur),0,1);
       if(reduced){ op=1-u; c.x=c.fl.x0; c.y=c.fl.y0; rot=c.fl.r0; }
       else { const e=eFling(u); c.x=c.fl.x0+(c.fl.x1-c.fl.x0)*e; c.y=c.fl.y0*(1-e); rot=c.fl.r0+(c.fl.r1-c.fl.r0)*e; }
-      if(u>=1){ c.mode='rest'; c.x=c.y=c.vx=c.vy=0; c.depth=4; c.dv=0; c.dTarget=4; c.fade=0; c.fadeT0=now; c.fl=null; rot=0; op=1; }
+      if(u>=1){ c.mode='rest'; c.x=c.y=c.vx=c.vy=0; c.depth=4; c.dv=0; c.dTarget=4; c.fl=null; rot=0; op=1; }
     } else if(c.mode==='spring'){
       if(c.lin2){ const u=clamp((now-c.lin2.t0)/P.reducedDur,0,1); c.x=c.lin2.x*(1-u); c.y=c.lin2.y*(1-u); if(u>=1){c.lin2=null;c.mode='rest';} }
       else { for(let s=0;s<steps;s++){ [c.x,c.vx]=spring(c.x,c.vx,0,P.snap,h); [c.y,c.vy]=spring(c.y,c.vy,0,P.snap,h); }
@@ -235,17 +237,15 @@ function frame(now){
     // tilt (top card only)
     if(c===top&&c.mode!=='fling'&&c.mode!=='drag'){} else { c.ttx=0; c.tty=0; }
     for(let s=0;s<steps;s++){ [c.tx,c.tvx]=spring(c.tx,c.tvx,c.ttx,P.tilt,h); [c.ty,c.tvy]=spring(c.ty,c.tvy,c.tty,P.tilt,h); }
-    // fade-in after returning to the bottom
-    if(c.fade<1)c.fade=clamp((now-c.fadeT0)/P.fadeIn,0,1);
     const d=c.mode==='fling'?0:c.depth;
     const depthOp=clamp(4-d,0,1);
     const yy=d*P.dy+c.y+(1-ei)*P.introY;
     const sc=1-d*P.ds;
     c.el.style.transform=`perspective(${P.perspective}px) translate3d(${c.x.toFixed(2)}px,${yy.toFixed(2)}px,0) rotate(${rot.toFixed(3)}deg) rotateX(${c.tx.toFixed(3)}deg) rotateY(${c.ty.toFixed(3)}deg) scale(${sc.toFixed(4)})`;
-    c.el.style.opacity=(op*depthOp*ei*c.fade).toFixed(3);
+    c.el.style.opacity=(op*depthOp*io).toFixed(3);
     c.el.style.zIndex=c.mode==='fling'?'20':String(Math.round(100-d*10));
     c.shadeEl.style.opacity=(clamp(d,0,4)*P.shade).toFixed(3);
-    c.tickEl.style.opacity=clamp(1-d,0,1).toFixed(3);
+    c.tickEl.style.opacity=(c===top&&c.mode!=='fling'?clamp((now-c.tickT0)/P.tickFade,0,1):0).toFixed(3);
   }
   requestAnimationFrame(frame);
 }
@@ -254,9 +254,10 @@ let started=false;
 function start(){ if(started)return; started=true; measure();
   const now=performance.now();
   // deal bottom -> top: depth 4 first
-  cards.forEach(c=>{ c.introT0=now+(4-c.i)*P.introStagger; });
+  cards.forEach(c=>{ c.introT0=now+(4-c.i)*P.introStagger; }); cards[order[0]].tickT0=cards[order[0]].introT0;
+  frame(now); last=0; document.getElementById('stage').style.visibility='visible';
   introEnd=now+4*P.introStagger+P.introDur; nextHint=introEnd+P.hintIdle;
-  requestAnimationFrame(frame); }
+}
 window.__stack={P,cards,order:()=>order};
 </script>
 <script defer src="/_vercel/insights/script.js"></script>

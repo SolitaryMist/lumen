@@ -44,7 +44,9 @@ import kotlin.math.sign
 /* ===== Stack parameters (identical to web / SwiftUI) =====
    CARDS 5 · 320x440 (r20) wide · min(78% width, 320) at 8:11 (r18) phone · padding 28
    DEPTH i: translationY i*10 · scale 1-i*0.04 · darken 6%/level · alpha clamp(4-depth,0,1)
-   INTRO deal bottom->top, stagger 70, 700ms, cubic-bezier(0.22,1,0.36,1), y+40, alpha 0->1
+   INTRO deal bottom->top, stagger 70, 700ms position cubic-bezier(0.22,1,0.36,1) from y+40;
+         alpha 0->1 linear in the first 160ms only
+   TICK amber line only on the top card, fades in 200ms linear when a card becomes top
    DRAG x 1:1, y*0.6, rot clamp(x*0.06, ±14)°, origin (0.5, 1.2); card below lifts p*0.6, p=min(|x|/0.5W,1)
    FLING IF |x| > 0.35W or |vx| > 800 dp/s · FLING 360ms cubic-bezier(0.2,0.7,0.3,1) to ±(screen/2+W), ±24°
    SNAP spring k380 c30 (dampingRatio 0.77) with release velocity · SHIFT spring k260 c26 (0.81), stagger 40ms
@@ -54,7 +56,7 @@ import kotlin.math.sign
    ========================================================= */
 private object ST {
     const val DY = 10f; const val DS = 0.04f; const val SHADE = 0.06f
-    const val INTRO_STAGGER = 70L; const val INTRO_DUR = 700; const val INTRO_Y = 40f
+    const val INTRO_STAGGER = 70L; const val INTRO_DUR = 700; const val INTRO_FADE = 160; const val TICK_FADE = 200; const val INTRO_Y = 40f
     const val Y_DAMP = 0.6f; const val ROT_PER_DP = 0.06f; const val ROT_MAX = 14f; const val LIFT = 0.6f
     const val FLING_X = 0.35f; const val FLING_V = 800f; const val FLING_DUR = 360; const val FLING_ROT = 24f
     const val SHIFT_STAGGER = 40L; const val TAP_SLOP = 8f
@@ -81,7 +83,8 @@ private val items = listOf(
 
 private class CardAnim(i: Int) {
     val x = Animatable(0f); val y = Animatable(0f); val rot = Animatable(0f)
-    val depth = Animatable(i.toFloat()); val intro = Animatable(0f); val fade = Animatable(1f)
+    val depth = Animatable(i.toFloat()); val intro = Animatable(0f); val introAlpha = Animatable(0f)
+    val fade = Animatable(1f); val tick = Animatable(0f)
     var flinging by mutableStateOf(false)
 }
 
@@ -118,6 +121,8 @@ fun ThrowStack(modifier: Modifier = Modifier) {
         fun fling(ci: Int, dir: Float) {
             val c = cards[ci]; c.flinging = true
             val newOrder = order.drop(1) + order.first(); order = newOrder; shiftStack(newOrder)
+            scope.launch { c.tick.snapTo(0f) }
+            scope.launch { cards[newOrder.first()].tick.snapTo(0f); cards[newOrder.first()].tick.animateTo(1f, tween(ST.TICK_FADE, easing = LinearEasing)) }
             scope.launch {
                 if (reduced) { c.fade.animateTo(0f, tween(ST.REDUCED_DUR, easing = LinearEasing)) }
                 else {
@@ -126,15 +131,16 @@ fun ThrowStack(modifier: Modifier = Modifier) {
                     c.x.animateTo(dir * (screenW / 2 + wDp), tween(ST.FLING_DUR, easing = ST.eFling))
                 }
                 // back to the bottom: depth 4 has alpha 0, it only fades in while rising to depth 3 -> no flash
-                c.x.snapTo(0f); c.y.snapTo(0f); c.rot.snapTo(0f); c.depth.snapTo(4f); c.fade.snapTo(0f)
+                c.x.snapTo(0f); c.y.snapTo(0f); c.rot.snapTo(0f); c.depth.snapTo(4f); c.fade.snapTo(1f)
                 c.flinging = false
-                c.fade.animateTo(1f, tween(240, easing = LinearEasing))
             }
         }
 
         // intro + hint
         LaunchedEffect(Unit) {
             cards.forEachIndexed { i, c -> launch { delay((4 - i) * ST.INTRO_STAGGER)
+                launch { c.introAlpha.animateTo(1f, tween(ST.INTRO_FADE, easing = LinearEasing)) }
+                if (i == 0) launch { c.tick.animateTo(1f, tween(ST.TICK_FADE, easing = LinearEasing)) }
                 c.intro.animateTo(1f, if (reduced) tween(ST.INTRO_DUR, easing = LinearEasing) else tween(ST.INTRO_DUR, easing = ST.eIntro)) } }
             if (reduced) return@LaunchedEffect
             delay(4 * ST.INTRO_STAGGER + ST.INTRO_DUR + ST.HINT_IDLE)
@@ -164,7 +170,7 @@ fun ThrowStack(modifier: Modifier = Modifier) {
                             translationY = (dd * ST.DY + c.y.value + (1f - c.intro.value) * ST.INTRO_Y).dp.toPx()
                             rotationZ = c.rot.value
                             val s = 1f - dd * ST.DS; scaleX = s; scaleY = s
-                            alpha = (4f - dd).coerceIn(0f, 1f) * c.intro.value * c.fade.value
+                            alpha = (4f - dd).coerceIn(0f, 1f) * c.introAlpha.value * c.fade.value
                         }
                         .background(ST.face, RoundedCornerShape(radius))
                         .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(radius))
@@ -201,7 +207,7 @@ fun ThrowStack(modifier: Modifier = Modifier) {
                         })
                 ) {
                     Column(Modifier.fillMaxSize().padding(28.dp)) {
-                        Box(Modifier.size(24.dp, 2.dp).graphicsLayer { alpha = (1f - dd).coerceIn(0f, 1f) }.background(ST.amber))
+                        Box(Modifier.size(24.dp, 2.dp).graphicsLayer { alpha = if (isTop && !c.flinging) c.tick.value else 0f }.background(ST.amber))
                         Spacer(Modifier.height(14.dp))
                         Text("%02d".format(i + 1), color = ST.fg, fontFamily = inter, fontWeight = FontWeight.SemiBold,
                             fontSize = 96.sp, letterSpacing = (-0.04).em, lineHeight = 86.sp)
