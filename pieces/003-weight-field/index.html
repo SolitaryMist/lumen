@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Weight Field — Lumen 003</title>
 <meta property="og:title" content="Weight Field — Lumen 003">
-<meta property="og:description" content="A word whose weight follows your finger. Motion study by @aldininin.">
+<meta property="og:description" content="A word whose weight follows your pointer. Motion study by @aldininin.">
 <meta property="og:image" content="https://lumen-motion.vercel.app/003-weight-field/og.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://lumen-motion.vercel.app/003-weight-field/og.png">
-<meta name="description" content="Weight Field — each letter of LUMEN gets heavier as you get close. Lumen 003 by @aldininin.">
+<meta name="description" content="Weight Field — each letter of LUMEN turns bold on hover. Lumen 003 by @aldininin.">
 <link rel="preload" href="inter-var.woff2" as="font" type="font/woff2" crossorigin>
 <style>
 @font-face{font-family:"Inter Var";src:url(inter-var.woff2) format("woff2");font-weight:100 900;font-display:block}
@@ -39,7 +39,7 @@ a{color:inherit;text-decoration:none}
   <a href="https://github.com/SolitaryMist/lumen" target="_blank" rel="noopener">GitHub</a>
   <a href="https://x.com/aldininin" target="_blank" rel="noopener">@aldininin</a>
 </nav>
-<main class="stage" id="stage" aria-label="Weight Field: the word LUMEN, letters get heavier near your pointer">
+<main class="stage" id="stage" aria-label="Weight Field: the word LUMEN, letters turn bold near your pointer">
   <div class="word" id="word" aria-hidden="true"></div>
   <div class="bar" id="bar"></div>
 </main>
@@ -60,7 +60,7 @@ a{color:inherit;text-decoration:none}
    WIDTH           72vw desktop, 86vw mobile (<=760px)
    TOUR (no hover) sweep left->right 1400ms cubic-bezier(0.22,1,0.36,1), then cosine ping-pong period 7000ms
                    starting at the right end (velocity 0 at both ends, so the handoff is velocity-continuous)
-   RESUME          800ms after finger release; 1000ms smoothstep blend from finger position into the ping-pong
+   RESUME          800ms after pointer release; 1000ms smoothstep blend from pointer position into the ping-pong
    REDUCED MOTION  no tour, no springs: 200ms linear to target; intro = fade only
    COLORS          bg #0E0E10, word #E8E6E1, secondary #6B6A70, accent #F2A65A
    ==================================================================== */
