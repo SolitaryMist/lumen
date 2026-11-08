@@ -1,6 +1,6 @@
 {
   "title": "Stack",
-  "subtitle": "Throw a card, the deck follows",
+  "subtitle": "A deck you can throw",
   "date": "2026-11-08",
   "tags": ["gesture", "physics", "spring"]
 }

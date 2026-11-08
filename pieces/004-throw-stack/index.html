@@ -33,10 +33,11 @@ a{color:inherit;text-decoration:none}
 .content{display:flex;flex-direction:column;flex:1;opacity:0;will-change:opacity}
 .tick{width:24px;height:2px;background:var(--amber);opacity:0;margin-bottom:14px}
 .no{font-size:96px;font-weight:600;letter-spacing:-0.04em;line-height:0.9}
-.meta{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.meta{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:28px}
+.meta>div{min-width:0}
 .t{font-size:15px;font-weight:500;line-height:1.3}
-.s{font-size:13px;color:var(--dim);margin-top:4px;line-height:1.35}
-.open{font-size:13px;color:var(--dim);white-space:nowrap;transition:color 280ms cubic-bezier(0.22,1,0.36,1)}
+.s{font-size:13px;color:var(--dim);margin-top:4px;line-height:1.35;text-wrap:balance}
+.open{font-size:13px;line-height:1.35;color:var(--dim);white-space:nowrap;flex:none;transition:color 280ms cubic-bezier(0.22,1,0.36,1)}
 .open:hover,.open:focus-visible{color:var(--fg)}
 .count{position:fixed;left:24px;bottom:24px;font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;z-index:50}
 .count b{font-weight:400;color:var(--amber)}
@@ -104,7 +105,7 @@ const DATA=[
   {slug:'001-rim-trace', title:'Rim Trace', sub:'A rim of light that follows you'},
   {slug:'002-dusk-mesh', title:'Dusk', sub:'A gradient that breathes'},
   {slug:'003-weight-field', title:'Weight Field', sub:'Type that turns bold on hover'},
-  {slug:'004-throw-stack', title:'Stack', sub:'Throw a card, the deck follows'},
+  {slug:'004-throw-stack', title:'Stack', sub:'A deck you can throw'},
   {slug:null, title:'Coming soon', sub:'Next piece in the works'}
 ];
 const stackEl=document.getElementById('stack'), countEl=document.getElementById('count');
