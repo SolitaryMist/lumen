@@ -30,6 +30,7 @@ a{color:inherit;text-decoration:none}
   transform-origin:50% 120%;touch-action:none;overflow:hidden}
 @media (min-width:761px){.stack{width:320px;height:440px}.card{border-radius:20px}}
 .card .shade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;border-radius:inherit}
+.content{display:flex;flex-direction:column;flex:1;opacity:0;will-change:opacity}
 .tick{width:24px;height:2px;background:var(--amber);opacity:0;margin-bottom:14px}
 .no{font-size:96px;font-weight:600;letter-spacing:-0.04em;line-height:0.9}
 .meta{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
@@ -57,7 +58,8 @@ a{color:inherit;text-decoration:none}
    STACK DEPTH i  translateY i*10px · scale 1-i*0.04 · face darkened 6% per level · depth 4 opacity 0
                   (opacity = clamp(4 - depth, 0, 1), so a card fades in as it rises from 4 to 3)
    INTRO          deal bottom -> top, stagger 70ms, 700ms each: position y+40 -> rest with cubic-bezier(0.22,1,0.36,1);
-                  opacity 0 -> 1 linear in the first 160ms only. Stage hidden until fonts + layout are ready
+                  card face opacity 0 -> 1 linear in the first 160ms only; its text
+                  (number, title, subtitle, Open, amber line) stays at 0 until then, then 0 -> 1 linear over 120ms. Stage hidden until fonts + layout are ready
    TICK           amber line only on the top card; fades in 200ms linear when a card becomes top
    DRAG           x 1:1, y * 0.6, rotation = clamp(x * 0.06 deg/px, +-14 deg), origin 50% 120%
                   card below rises by p*0.6 depth, p = min(|x| / 0.5W, 1)
@@ -74,7 +76,7 @@ a{color:inherit;text-decoration:none}
    ============================================================= */
 const P = {
   dy:10, ds:0.04, shade:0.06,
-  introStagger:70, introDur:700, introFade:160, introY:40, tickFade:200,
+  introStagger:70, introDur:700, introFade:160, textFade:120, introY:40, tickFade:200,
   yDamp:0.6, rotPerPx:0.06, rotMax:14, lift:0.6,
   flingX:0.35, flingV:800, velWindow:80,
   flingDur:360, flingRot:24,
@@ -109,11 +111,11 @@ const stackEl=document.getElementById('stack'), countEl=document.getElementById(
 const cards=DATA.map((d,i)=>{
   const el=document.createElement('article'); el.className='card';
   el.setAttribute('aria-label',`${String(i+1).padStart(2,'0')} ${d.title}`);
-  el.innerHTML=`<div class="shade"></div><div class="tick"></div><div class="no">${String(i+1).padStart(2,'0')}</div>
-  <div class="meta"><div><div class="t"></div><div class="s"></div></div>${d.slug?`<a class="open" href="/${d.slug}/">Open ↗</a>`:''}</div>`;
+  el.innerHTML=`<div class="shade"></div><div class="content"><div class="tick"></div><div class="no">${String(i+1).padStart(2,'0')}</div>
+  <div class="meta"><div><div class="t"></div><div class="s"></div></div>${d.slug?`<a class="open" href="/${d.slug}/">Open ↗</a>`:''}</div></div>`;
   el.querySelector('.t').textContent=d.title; el.querySelector('.s').textContent=d.sub;
   stackEl.appendChild(el);
-  return {i,el,shadeEl:el.querySelector('.shade'),tickEl:el.querySelector('.tick'),
+  return {i,el,shadeEl:el.querySelector('.shade'),contentEl:el.querySelector('.content'),tickEl:el.querySelector('.tick'),
     depth:i,dv:0,dTarget:i,dStart:0,dSpring:P.shift,lin:null,
     x:0,vx:0,y:0,vy:0,mode:'rest',fl:null,op:1,tickT0:0,
     tx:0,tvx:0,ty:0,tvy:0,ttx:0,tty:0, intro:0,introT0:0};
@@ -210,7 +212,7 @@ function frame(now){
     hint={t0:now,c:top}; top.mode='hint'; }
   for(const c of cards){
     // intro
-    const ti=clamp((now-c.introT0)/P.introDur,0,1); const ei=reduced?ti:eIntro(ti); const io=clamp((now-c.introT0)/P.introFade,0,1);
+    const ti=clamp((now-c.introT0)/P.introDur,0,1); const ei=reduced?ti:eIntro(ti); const io=clamp((now-c.introT0)/P.introFade,0,1); const tio=clamp((now-c.introT0-P.introFade)/P.textFade,0,1);
     // depth
     if(c.mode!=='fling'){
       if(c.lin){ const u=clamp((now-c.lin.t0)/c.lin.dur,0,1); c.depth=c.lin.from+(c.lin.to-c.lin.from)*u; if(u>=1)c.lin=null; }
@@ -244,6 +246,7 @@ function frame(now){
     c.el.style.transform=`perspective(${P.perspective}px) translate3d(${c.x.toFixed(2)}px,${yy.toFixed(2)}px,0) rotate(${rot.toFixed(3)}deg) rotateX(${c.tx.toFixed(3)}deg) rotateY(${c.ty.toFixed(3)}deg) scale(${sc.toFixed(4)})`;
     c.el.style.opacity=(op*depthOp*io).toFixed(3);
     c.el.style.zIndex=c.mode==='fling'?'20':String(Math.round(100-d*10));
+    c.contentEl.style.opacity=tio.toFixed(3);
     c.shadeEl.style.opacity=(clamp(d,0,4)*P.shade).toFixed(3);
     c.tickEl.style.opacity=(c===top&&c.mode!=='fling'?clamp((now-c.tickT0)/P.tickFade,0,1):0).toFixed(3);
   }
@@ -254,7 +257,7 @@ let started=false;
 function start(){ if(started)return; started=true; measure();
   const now=performance.now();
   // deal bottom -> top: depth 4 first
-  cards.forEach(c=>{ c.introT0=now+(4-c.i)*P.introStagger; }); cards[order[0]].tickT0=cards[order[0]].introT0;
+  cards.forEach(c=>{ c.introT0=now+(4-c.i)*P.introStagger; }); cards[order[0]].tickT0=-1e9; // intro: line follows the 120ms text fade
   frame(now); last=0; document.getElementById('stage').style.visibility='visible';
   introEnd=now+4*P.introStagger+P.introDur; nextHint=introEnd+P.hintIdle;
 }
