@@ -1,6 +1,6 @@
 {
   "title": "Scale",
   "date": "2026-11-09",
-  "tags": ["scale", "spring", "instrument"],
-  "subtitle": "A soft tick rule that springs to your pointer"
+  "tags": ["scale", "tick", "spring", "instrument"],
+  "subtitle": "One tick goes amber on hover"
 }

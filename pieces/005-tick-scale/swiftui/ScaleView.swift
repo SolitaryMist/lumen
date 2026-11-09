@@ -272,7 +272,7 @@ struct ScaleView: View {
             .onChange(of: reduced) { value in model.reduced = value }
         }
         .accessibilityElement()
-        .accessibilityLabel("Scale. A soft tick rule that springs to your pointer.")
+        .accessibilityLabel("Scale. One tick goes amber on hover.")
     }
 
     private var links: some View {
