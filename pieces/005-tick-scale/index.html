@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scale — Lumen 005</title>
+<meta property="og:title" content="Scale — Lumen 005">
+<meta property="og:description" content="A scale that lights one tick amber on hover. Motion study by @aldininin.">
+<meta property="og:image" content="https://lumen-motion.vercel.app/005-tick-scale/og.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lumen-motion.vercel.app/005-tick-scale/og.png">
+<meta name="description" content="A scale that lights one tick amber on hover. Motion study by @aldininin.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="preload" href="inter-var.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Inter Var";src:url(inter-var.woff2) format("woff2");font-weight:100 900;font-display:block}
+:root{color-scheme:dark;--bg:#0B0B0C;--fg:#EDEDED;--dim:#6B6B6B;--idle:#2A2A2A;--amber:#FFB547}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;overscroll-behavior:none;
+  font-family:"Inter Var",Inter,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.links{position:fixed;top:20px;right:24px;z-index:50;display:flex;gap:16px;font-size:12px;line-height:1;font-weight:400}
+.links a{color:var(--dim);transition:color 280ms cubic-bezier(0.22,1,0.36,1)}
+.links a:hover,.links a:focus-visible{color:var(--fg)}
+.stage{position:fixed;inset:0;visibility:hidden;opacity:0;touch-action:none;user-select:none;-webkit-user-select:none}
+.rule{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none}
+.cap{width:56px;height:12px;line-height:12px;text-align:center;
+  font:400 12px/12px "JetBrains Mono",ui-monospace,monospace;letter-spacing:0.14em;color:var(--dim)}
+.cap.foot{margin-top:48px}
+.cap:not(.foot){margin-bottom:48px}
+.ticks{position:relative;width:56px;height:min(600px,62vh)}
+.tick{position:absolute;left:0;top:0;width:16px;height:2px;background:var(--idle);opacity:0;
+  transform-origin:left center;will-change:transform,opacity}
+.num{position:absolute;left:84px;top:0;opacity:0;color:var(--fg);
+  font-weight:500;font-size:clamp(56px,14vw,88px);letter-spacing:-0.04em;line-height:1;
+  font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;font-variation-settings:"wght" 500;
+  white-space:nowrap;will-change:transform,opacity}
+</style>
+</head>
+<body>
+<nav class="links" aria-label="Links">
+  <a href="https://github.com/SolitaryMist/lumen" target="_blank" rel="noopener">GitHub</a>
+  <a href="https://x.com/aldininin" target="_blank" rel="noopener">@aldininin</a>
+</nav>
+<main class="stage" id="stage" aria-label="Scale. One tick goes amber on hover.">
+  <div class="rule">
+    <p class="cap">005</p>
+    <div class="ticks" id="ticks"></div>
+    <p class="cap foot">SCALE</p>
+  </div>
+</main>
+<script>
+/* ===== Scale parameters (identical in SwiftUI / Compose) =====
+   TICKS          24 horizontal marks. Target column min(600px, 62vh), width 56px.
+                  Pitch = floor(target / 23 × dpr / 2) × 2 / dpr. Drawn height is pitch × 23.
+                  Tick tops sit at a column top snapped to an even device pixel, then i × pitch,
+                  so all 23 gaps match. Idle 16×2, neighbor 20×2, active 28×2. Length animates
+                  with scaleX (origin left). Value domain 0–100. Top of the column is 100, bottom is 0.
+   ACTIVE         activeIndex = round(value / 100 * 23), clamped 0…23. Exactly one tick is amber.
+                  Its drawn length is max(its spring length, the longest other tick), so the
+                  amber mark is never shorter than a grey one, on any frame.
+   NEIGHBOR       |Δ|==0 amber #FFB547 + 28px · |Δ|==1 #6B6B6B + 20px · else #2A2A2A + 16px
+                  (static targets — no extra falloff spring)
+   READOUT        Inter 500, clamp(56px, 14vw, 88px), tracking −0.04em, tabular nums, body color.
+                  Sits 28px to the right of the 56px column. Its Y follows the continuous value
+                  (same spring) plus a second channel of that spring onto the active tick,
+                  so a resting number sits on the lit mark and a moving number never jumps.
+   SPRING         Value, and a tick whose target length is shrinking: stiffness 200, damping 24, mass 1.
+                  A tick whose target length is growing: stiffness 320, damping 30, mass 1.
+                  Settle within 0.25 so a return to 50 rests on the boundary instead of chattering.
+   SWIFTUI        value / shrink .spring(response: 0.36, dampingFraction: 0.78)
+                  length grow .spring(response: 0.35, dampingFraction: 0.84)
+   COMPOSE        value / shrink spring(dampingRatio = 0.78f, stiffness = 200f)
+                  length grow spring(dampingRatio = 0.84f, stiffness = 320f)
+   CSS FALLBACK   cubic-bezier(0.22, 1, 0.36, 1) 480ms — not used; motion is the rAF spring.
+   DESKTOP        Rest at 50. Pointer maps Y to the spring target. Leave springs back to 50.
+   TOUCH          No fine pointer: after the reveal, 1400ms guide 0→100→20.
+                  First leg 760ms, second 640ms, each cubic-bezier(0.65, 0, 0.35, 1).
+                  Drift is 50 − 30·cos(ωt), period 8000ms, driftT0 = scanT0 + 1400.
+                  At t=0 it sits at 20 with zero velocity and turns upward (range 20–80).
+                  Touch drives the spring target from Y; on lift, 300ms smoothstep back into the drift.
+   INTRO          Hidden until the font is ready and the column is measured.
+                  Stage opacity 160ms linear. Ticks stagger from the center outward, 40ms apart,
+                  scaleX 0.6→1 and opacity, 160ms each. Number fades 120ms linear once tick
+                  opacities have landed. ~160+23×40 = 1.1s through the last tick.
+   REDUCED        Static at 50. No stagger, no guide, no drift. Amber stays on the active tick.
+   COLORS         bg #0B0B0C · fg #EDEDED · dim #6B6B6B · idle #2A2A2A · amber #FFB547
+   ================================================================= */
+const P = {
+  ticks: 24,
+  vmin: 0, vmax: 100, rest: 50,
+  lenIdle: 16, lenNear: 20, lenActive: 28,
+  colW: 56, gap: 28,
+  k: 200, c: 24, m: 1,
+  kGrow: 320, cGrow: 30,
+  swiftResponse: 0.36, swiftDamping: 0.78,
+  swiftResponseGrow: 0.35, swiftDampingGrow: 0.84,
+  composeDamping: 0.78, composeStiffness: 200,
+  composeDampingGrow: 0.84, composeStiffnessGrow: 320,
+  easeFallbackMs: 480,
+  stageFade: 160, stagger: 40, tickIn: 160, numFade: 120, tickFrom: 0.6,
+  scanDur: 1400, scanUp: 760, scanDown: 640, driftPeriod: 8000, driftLo: 20, driftHi: 80, resume: 300,
+  settle: 0.25,
+  amber: '#FFB547', near: '#6B6B6B', idle: '#2A2A2A'
+};
+const EASE_SOFT = [0.22, 1, 0.36, 1], EASE_GUIDE = [0.65, 0, 0.35, 1];
+function bez(x1, y1, x2, y2) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const X = t => ((ax * t + bx) * t + cx) * t, Y = t => ((ay * t + by) * t + cy) * t;
+  const dX = t => (3 * ax * t + 2 * bx) * t + cx;
+  return x => {
+    if (x <= 0) return 0; if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const e = X(t) - x, d = dX(t);
+      if (Math.abs(e) < 1e-6 || Math.abs(d) < 1e-6) break;
+      t -= e / d;
+    }
+    if (t < 0 || t > 1) { let a = 0, b = 1; t = x; for (let i = 0; i < 30; i++) { const v = X(t); if (v < x) a = t; else b = t; t = (a + b) / 2; } }
+    return Y(t);
+  };
+}
+const easeSoft = bez(...EASE_SOFT), easeGuide = bez(...EASE_GUIDE);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fine = !reduced && matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+function activeIndex(v) {
+  const t = clamp(v, P.vmin, P.vmax);
+  return clamp(Math.round(t / 100 * (P.ticks - 1)), 0, P.ticks - 1);
+}
+function lenTarget(i, active) {
+  const d = Math.abs(i - active);
+  return d === 0 ? P.lenActive : d === 1 ? P.lenNear : P.lenIdle;
+}
+function colorTarget(i, active) {
+  const d = Math.abs(i - active);
+  return d === 0 ? P.amber : d === 1 ? P.near : P.idle;
+}
+/* Semi-implicit Euler, 1/240 s substeps. Mass is 1. */
+function spring(pos, vel, target, dt, k, c) {
+  const n = Math.max(1, Math.round(dt * 240)), h = dt / n;
+  for (let s = 0; s < n; s++) {
+    vel += (-k * (pos - target) - c * vel) * h;
+    pos += vel * h;
+  }
+  if (Math.abs(pos - target) < P.settle && Math.abs(vel) < 40) { pos = target; vel = 0; }
+  return [pos, vel];
+}
+/* Extending a tick uses 320/30. Contracting keeps 200/24. Chosen per substep. */
+function lengthSpring(pos, vel, target, dt) {
+  const n = Math.max(1, Math.round(dt * 240)), h = dt / n;
+  for (let s = 0; s < n; s++) {
+    const grow = target > pos;
+    vel += (-(grow ? P.kGrow : P.k) * (pos - target) - (grow ? P.cGrow : P.c) * vel) * h;
+    pos += vel * h;
+  }
+  if (Math.abs(pos - target) < P.settle && Math.abs(vel) < 40) { pos = target; vel = 0; }
+  return [pos, vel];
+}
+function scanValue(elapsed) {
+  if (elapsed <= P.scanUp) return P.vmax * easeGuide(elapsed / P.scanUp);
+  return P.vmax + (P.driftLo - P.vmax) * easeGuide((elapsed - P.scanUp) / P.scanDown);
+}
+/* 50 − 30·cos(ωt). At t=0 this is 20 with zero velocity, then it turns upward. */
+function driftValue(now) {
+  const phase = ((now - driftT0) / P.driftPeriod) * Math.PI * 2;
+  return 50 - 30 * Math.cos(phase);
+}
+function smooth(u) { return u * u * (3 - 2 * u); }
+/* Even device pixels. Thickness stays 2 CSS px; pitch itself is a multiple of 2 device px. */
+function snapEven(px) {
+  const dpr = window.devicePixelRatio || 1;
+  return Math.round(px * dpr / 2) * 2 / dpr;
+}
+
+const ticksEl = document.getElementById('ticks');
+const stage = document.getElementById('stage');
+const delays = new Array(P.ticks);
+{
+  const seq = [];
+  let lo = 12, hi = 12;
+  seq.push(12);
+  while (seq.length < P.ticks) {
+    if (--lo >= 0) seq.push(lo);
+    if (++hi < P.ticks) seq.push(hi);
+  }
+  seq.forEach((i, s) => { delays[i] = s * P.stagger; });
+}
+const ticks = Array.from({ length: P.ticks }, () => {
+  const el = document.createElement('div');
+  el.className = 'tick';
+  el.setAttribute('aria-hidden', 'true');
+  ticksEl.appendChild(el);
+  return { el, len: P.lenIdle, vel: 0, col: '' };
+});
+const introSpan = (P.ticks - 1) * P.stagger;
+const numEl = document.createElement('div');
+numEl.className = 'num';
+numEl.setAttribute('aria-hidden', 'true');
+ticksEl.appendChild(numEl);
+
+let value = fine || reduced ? P.rest : P.vmin;
+let vvel = 0;
+let yOff = 0, yOffV = 0;
+let target = value;
+let mode = fine || reduced ? 'spring' : 'hold';
+let shown = null;
+let colTop = 0, colH = 600, pitch = 0, snapShift = 0, colLeftShift = 0;
+let t0 = 0, scanT0 = 0, driftT0 = 0, blendT0 = 0, blendFrom = P.rest;
+let touching = false, touchId = null;
+let last = 0, started = false;
+
+function seedLengths() {
+  const a = activeIndex(value);
+  for (let i = 0; i < ticks.length; i++) {
+    ticks[i].len = lenTarget(i, a);
+    ticks[i].vel = 0;
+  }
+}
+seedLengths();
+
+/* Pitch from the 62vh target, then the column is pitch × 23. Tops share one snapped origin. */
+function layoutColumn() {
+  const dpr = window.devicePixelRatio || 1;
+  const gaps = P.ticks - 1;
+  const target = Math.min(600, innerHeight * 0.62);
+  const pitchDev = Math.max(2, Math.floor(target / gaps * dpr / 2) * 2);
+  pitch = pitchDev / dpr;
+  colH = pitch * gaps;
+  const h = colH + 'px';
+  if (ticksEl.style.height !== h) ticksEl.style.height = h;
+  const host = ticksEl.getBoundingClientRect();
+  colTop = host.top;
+  const topDev = Math.round(host.top * dpr / 2) * 2;
+  snapShift = topDev / dpr - host.top;
+  colLeftShift = snapEven(host.left) - host.left;
+}
+function measure() { layoutColumn(); }
+function valueFromY(y) {
+  if (colH <= 0) return P.rest;
+  const topCenter = colTop + snapShift + 1;
+  return clamp((1 - (y - topCenter) / colH) * 100, P.vmin, P.vmax);
+}
+/* Centers. k = 0 is the top tick (value 100). The stroke top is one px above the center. */
+function centerFromK(k) {
+  return snapShift + k * pitch + 1;
+}
+function yFromValue(v) {
+  return centerFromK((1 - clamp(v, P.vmin, P.vmax) / 100) * (P.ticks - 1));
+}
+function tickY(i) {
+  return centerFromK((P.ticks - 1) - i);
+}
+/* How far the value's Y sits from the active tick. Sprung, never assigned in a jump. */
+function alignTarget(v, active) {
+  return tickY(active) - yFromValue(v);
+}
+
+addEventListener('pointermove', e => {
+  if (!started || !fine || e.pointerType === 'touch') return;
+  if (e.target.closest && e.target.closest('nav')) { target = P.rest; return; }
+  target = valueFromY(e.clientY);
+});
+document.addEventListener('pointerout', e => {
+  if (!started || !fine) return;
+  if (!e.relatedTarget) target = P.rest;
+});
+stage.addEventListener('pointerdown', e => {
+  if (!started || fine || reduced || e.pointerType === 'mouse') return;
+  touching = true;
+  touchId = e.pointerId;
+  mode = 'spring';
+  target = valueFromY(e.clientY);
+  try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+  e.preventDefault();
+});
+addEventListener('pointermove', e => {
+  if (!touching || e.pointerId !== touchId) return;
+  target = valueFromY(e.clientY);
+});
+function endTouch(e) {
+  if (!touching || (e && e.pointerId !== touchId)) return;
+  touching = false;
+  touchId = null;
+  if (!driftT0) driftT0 = performance.now();
+  blendFrom = value;
+  blendT0 = performance.now();
+  mode = 'blend';
+}
+addEventListener('pointerup', endTouch);
+addEventListener('pointercancel', endTouch);
+function onResize() { measure(); yOff = alignTarget(value, activeIndex(value)); yOffV = 0; }
+addEventListener('resize', onResize);
+if (window.visualViewport) visualViewport.addEventListener('resize', onResize);
+
+function frame(now) {
+  const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
+  last = now;
+  if (!reduced && !fine && mode === 'hold' && now >= t0 + introSpan + P.tickIn) {
+    mode = 'scan';
+    scanT0 = now;
+  }
+  if (!reduced) {
+    if (mode === 'scan') {
+      const el = now - scanT0;
+      if (el >= P.scanDur) { driftT0 = scanT0 + P.scanDur; mode = 'drift'; value = driftValue(now); vvel = 0; }
+      else { value = scanValue(el); vvel = 0; }
+    } else if (mode === 'drift') {
+      value = driftValue(now); vvel = 0;
+    } else if (mode === 'blend') {
+      const u = clamp((now - blendT0) / P.resume, 0, 1);
+      value = blendFrom + (driftValue(now) - blendFrom) * smooth(u);
+      vvel = 0;
+      if (u >= 1) mode = 'drift';
+    } else if (mode === 'spring') {
+      [value, vvel] = spring(value, vvel, target, dt, P.k, P.c);
+    }
+  } else {
+    value = P.rest; vvel = 0; target = P.rest;
+  }
+
+  layoutColumn();
+  const active = activeIndex(value);
+  const offT = alignTarget(value, active);
+  if (reduced) { yOff = offT; yOffV = 0; }
+  else if (dt > 0) [yOff, yOffV] = spring(yOff, yOffV, offT, dt, P.k, P.c);
+  const grows = new Array(ticks.length);
+  for (let i = 0; i < ticks.length; i++) {
+    const tk = ticks[i];
+    const goal = lenTarget(i, active);
+    if (reduced) { tk.len = goal; tk.vel = 0; }
+    else if (dt > 0) [tk.len, tk.vel] = lengthSpring(tk.len, tk.vel, goal, dt);
+    const introT = reduced ? 1 : clamp((now - t0 - delays[i]) / P.tickIn, 0, 1);
+    grows[i] = P.tickFrom + (1 - P.tickFrom) * (reduced ? 1 : easeSoft(introT));
+  }
+  let maxOther = 0;
+  for (let i = 0; i < ticks.length; i++) {
+    if (i !== active) maxOther = Math.max(maxOther, ticks[i].len * grows[i]);
+  }
+  for (let i = 0; i < ticks.length; i++) {
+    const tk = ticks[i];
+    const introT = reduced ? 1 : clamp((now - t0 - delays[i]) / P.tickIn, 0, 1);
+    const rendered = i === active ? Math.max(tk.len, maxOther) : tk.len * grows[i];
+    const strokeTop = snapShift + ((P.ticks - 1) - i) * pitch;
+    tk.el.style.transform = `translate3d(${colLeftShift}px,${strokeTop}px,0) scaleX(${(rendered / P.lenIdle).toFixed(4)})`;
+    tk.el.style.opacity = introT.toFixed(3);
+    const col = colorTarget(i, active);
+    if (tk.col !== col) { tk.col = col; tk.el.style.background = col; }
+  }
+
+  const n = Math.round(clamp(value, P.vmin, P.vmax));
+  if (n !== shown) { shown = n; numEl.textContent = String(n); }
+  const numLand = t0 + introSpan + P.tickIn;
+  const numOp = reduced ? 1 : clamp((now - numLand) / P.numFade, 0, 1);
+  numEl.style.opacity = numOp.toFixed(3);
+  numEl.style.transform = `translate3d(0,${(yFromValue(value) + yOff).toFixed(2)}px,0) translateY(-50%)`;
+
+  const stageOp = reduced ? 1 : clamp((now - t0) / P.stageFade, 0, 1);
+  stage.style.opacity = stageOp.toFixed(3);
+  if (!document.hidden) requestAnimationFrame(frame);
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { last = 0; requestAnimationFrame(frame); }
+});
+
+function start() {
+  if (started) return;
+  started = true;
+  measure();
+  yOff = alignTarget(value, activeIndex(value));
+  yOffV = 0;
+  ticksEl.style.width = P.colW + 'px';
+  numEl.style.left = (P.colW + P.gap) + 'px';
+  t0 = performance.now();
+  numEl.textContent = String(Math.round(value));
+  shown = Math.round(value);
+  stage.style.visibility = 'visible';
+  last = 0;
+  frame(t0);
+}
+document.fonts.load("500 88px 'Inter Var'").then(() => start(), () => start());
+window.__scale = {
+  P,
+  activeIndex,
+  scanValue,
+  state: () => ({ value, target, mode, shown, active: activeIndex(value), fine, reduced, t0, scanT0, driftT0 })
+};
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
