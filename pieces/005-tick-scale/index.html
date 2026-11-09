@@ -71,10 +71,12 @@ a{color:inherit;text-decoration:none}
    COMPOSE        spring(dampingRatio = 0.78f, stiffness = 200f)
    CSS FALLBACK   cubic-bezier(0.22, 1, 0.36, 1) 480ms — not used; motion is the rAF spring.
    DESKTOP        Rest at 50. Pointer maps Y to the spring target. Leave springs back to 50.
-   TOUCH          No fine pointer: after the reveal, 1400ms guide 0→100→50,
+   TOUCH          No fine pointer: after the reveal, 1400ms guide 0→100→80,
                   cubic-bezier(0.65, 0, 0.35, 1), split in two equal halves.
-                  Then an 8000ms cosine round-trip on 20–80 (zero velocity at the ends).
-                  Touch drives the spring target from Y; on lift, 300ms smoothstep back into the drift.
+                  The second leg lands on driftHi. Drift is mid + amp·cos(ωt),
+                  mid 50, amp 30, period 8000ms: at t=0 it sits at 80 with zero
+                  velocity (range 20–80). Touch drives the spring target from Y;
+                  on lift, 300ms smoothstep back into the drift.
    INTRO          Hidden until the font is ready and the column is measured.
                   Stage opacity 160ms linear. Ticks stagger from the center outward, 40ms apart,
                   scaleX 0.6→1 and opacity, 160ms each. Number fades 120ms linear once tick
@@ -144,14 +146,14 @@ function spring(pos, vel, target, dt) {
 function scanValue(elapsed) {
   const half = P.scanDur / 2;
   if (elapsed <= half) return P.vmax * easeGuide(elapsed / half);
-  return P.vmax + (P.rest - P.vmax) * easeGuide((elapsed - half) / half);
+  return P.vmax + (P.driftHi - P.vmax) * easeGuide((elapsed - half) / half);
 }
-/* cos(ωt − π/2) = sin(ωt): leaves 50 toward 80, troughs at 20, back to 50. */
+/* mid 50, amp 30. cos(ωt) is 1 at t=0, so the handoff sits at driftHi with zero velocity. */
 function driftValue(now) {
   const amp = (P.driftHi - P.driftLo) / 2;
   const mid = (P.driftHi + P.driftLo) / 2;
   const phase = ((now - driftT0) / P.driftPeriod) * Math.PI * 2;
-  return mid + amp * Math.cos(phase - Math.PI / 2);
+  return mid + amp * Math.cos(phase);
 }
 function smooth(u) { return u * u * (3 - 2 * u); }
 

@@ -1,6 +1,9 @@
 // Scale — Lumen 005 (SwiftUI, iOS 16+)
 // Bundle Inter Variable (see README). Parameters match the web piece one-to-one.
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /* ===== Scale parameters (identical to web / Compose) =====
    TICKS 24 · column min(420, 56% of height) × 56 · idle 16×2, neighbor 20×2, active 28×2
@@ -12,8 +15,12 @@ import SwiftUI
    SPRING stiffness 200, damping 24, mass 1. Settle within 0.25 so a return to 50 does not chatter the boundary.
           Platform form: .spring(response: 0.36, dampingFraction: 0.78)
           Compose form: spring(dampingRatio: 0.78, stiffness: 200)
-   GUIDE  no fine pointer: 1400ms 0→100→50, cubic-bezier(0.65, 0, 0.35, 1), then 8000ms cosine on 20–80.
-          Touch sets the spring target; release blends back over 300ms.
+   GUIDE  no fine pointer: 1400ms 0→100→80, cubic-bezier(0.65, 0, 0.35, 1). The second leg
+          lands on driftHi. Drift is mid + amp·cos(ωt), mid 50, amp 30, period 8000ms,
+          so t=0 sits at 80 with zero velocity (range 20–80). Touch sets the spring target;
+          release blends back over 300ms.
+   FINE   Known at launch on macOS, Mac Catalyst, and iPad (pointer support). Those rest at 50
+          in spring mode. A phone waits out the reveal, then runs the guide.
    INTRO  stage 160ms linear · ticks from the center outward, 40ms apart, scale 0.6→1 + opacity, 160ms
           · number fades 120ms after the last tick lands
    REDUCED static at 50, no stagger, no guide, no drift, amber on the active tick
@@ -62,6 +69,18 @@ struct Bezier {
 let easeSoft = Bezier(x1: 0.22, y1: 1, x2: 0.36, y2: 1)
 let easeGuide = Bezier(x1: 0.65, y1: 0, x2: 0.35, y2: 1)
 
+/// Hover-capable pointer known before the first event: macOS, Mac Catalyst, iPad pointer support.
+func platformFinePointer() -> Bool {
+    #if os(macOS) || targetEnvironment(macCatalyst)
+    return true
+    #elseif os(iOS)
+    if UIDevice.current.userInterfaceIdiom == .pad { return true }
+    return ProcessInfo.processInfo.isiOSAppOnMac
+    #else
+    return false
+    #endif
+}
+
 func activeIndex(_ v: Double) -> Int {
     let t = min(SC.vmax, max(SC.vmin, v))
     return min(SC.ticks - 1, max(0, Int((t / 100 * Double(SC.ticks - 1)).rounded())))
@@ -92,16 +111,19 @@ final class ScaleModel {
             hi += 1; if hi < SC.ticks { seq.append(hi) }
         }
         for (s, i) in seq.enumerated() { delays[i] = Double(s) * SC.stagger }
+        fine = platformFinePointer()
     }
 
     func boot(now: Double) {
         guard !booted else { return }
         booted = true
         t0 = now
-        // Touch devices reveal at 0 so the guide can leave from 0. A fine pointer, and Reduce Motion, rest at 50.
-        value = reduced ? SC.rest : SC.vmin
+        // Touch reveals at 0 so the guide can leave from 0 and land on the drift crest.
+        // A fine pointer known at launch, and Reduce Motion, rest at 50 in spring mode.
+        let restAtMid = reduced || fine
+        value = restAtMid ? SC.rest : SC.vmin
         target = value
-        mode = reduced ? .spring : .hold
+        mode = restAtMid ? .spring : .hold
         seed()
     }
 
@@ -124,13 +146,14 @@ final class ScaleModel {
     func scan(_ elapsed: Double) -> Double {
         let half = SC.scanDur / 2
         if elapsed <= half { return SC.vmax * easeGuide(elapsed / half) }
-        return SC.vmax + (SC.rest - SC.vmax) * easeGuide((elapsed - half) / half)
+        return SC.vmax + (SC.driftHi - SC.vmax) * easeGuide((elapsed - half) / half)
     }
+    /// mid 50, amp 30. cos(ωt) is 1 at t=0, so the handoff sits at driftHi with zero velocity.
     func drift(_ now: Double) -> Double {
         let amp = (SC.driftHi - SC.driftLo) / 2
         let mid = (SC.driftHi + SC.driftLo) / 2
         let phase = (now - driftT0) / SC.driftPeriod * 2 * .pi
-        return mid + amp * cos(phase - .pi / 2)
+        return mid + amp * cos(phase)
     }
     func smooth(_ u: Double) -> Double { u * u * (3 - 2 * u) }
 

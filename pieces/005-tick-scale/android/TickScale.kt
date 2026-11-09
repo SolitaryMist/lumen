@@ -3,6 +3,7 @@
 package lumen.tickscale
 
 import android.provider.Settings
+import android.view.InputDevice
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -39,8 +40,12 @@ import kotlin.math.roundToInt
    SPRING stiffness 200, damping 24, mass 1, 1/240 s substeps.
           Compose form: spring(dampingRatio = 0.78f, stiffness = 200f)
           SwiftUI form: .spring(response = 0.36, dampingFraction = 0.78)
-   GUIDE  no fine pointer: 1400ms 0→100→50, cubic-bezier(0.65, 0, 0.35, 1), then 8000ms cosine on 20–80.
-          A press drives the spring target; release blends back over 300ms.
+   GUIDE  no fine pointer: 1400ms 0→100→80, cubic-bezier(0.65, 0, 0.35, 1). The second leg
+          lands on driftHi. Drift is mid + amp·cos(ωt), mid 50, amp 30, period 8000ms,
+          so t=0 sits at 80 with zero velocity (range 20–80). A press drives the spring
+          target; release blends back over 300ms.
+   FINE   Known at launch when an input device advertises SOURCE_MOUSE, SOURCE_MOUSE_RELATIVE,
+          or SOURCE_TOUCHPAD. Those rest at 50 in spring mode. Touch alone runs the guide.
    INTRO  160ms stage · ticks from the center outward, 40ms apart, scale 0.6→1 + alpha, 160ms
           · number fades 120ms after the last tick
    REDUCED animator duration scale 0: static at 50, no stagger, no guide, no drift
@@ -92,6 +97,19 @@ private fun lenTarget(i: Int, active: Int): Float {
 }
 private fun smooth(u: Float) = u * u * (3f - 2f * u)
 
+/** Hover-capable pointer already attached: mouse or touchpad. A touchscreen does not match. */
+private fun hasFinePointer(): Boolean {
+    val watched = intArrayOf(
+        InputDevice.SOURCE_MOUSE,
+        InputDevice.SOURCE_MOUSE_RELATIVE,
+        InputDevice.SOURCE_TOUCHPAD
+    )
+    return InputDevice.getDeviceIds().any { id ->
+        val sources = InputDevice.getDevice(id)?.sources ?: return@any false
+        watched.any { source -> (sources and source) == source }
+    }
+}
+
 private class Sim {
     var value = 0f
     var vel = 0f
@@ -122,6 +140,7 @@ private class Sim {
             if (++hi < SC.TICKS) seq.add(hi)
         }
         seq.forEachIndexed { s, i -> delays[i] = s * SC.STAGGER }
+        fine = hasFinePointer()
     }
 
     fun seed() {
@@ -146,23 +165,28 @@ private class Sim {
 
     private fun scan(elapsed: Double): Float {
         val half = SC.SCAN / 2
+        val hi = SC.DRIFT_HI.toFloat()
         return if (elapsed <= half) 100f * SC.easeGuide.transform((elapsed / half).toFloat())
-        else 100f + (SC.REST - 100f) * SC.easeGuide.transform(((elapsed - half) / half).toFloat())
+        else 100f + (hi - 100f) * SC.easeGuide.transform(((elapsed - half) / half).toFloat())
     }
 
+    /** mid 50, amp 30. cos(ωt) is 1 at t=0, so the handoff sits at driftHi with zero velocity. */
     private fun drift(now: Double): Float {
         val amp = (SC.DRIFT_HI - SC.DRIFT_LO) / 2
         val mid = (SC.DRIFT_HI + SC.DRIFT_LO) / 2
         val phase = (now - driftT0) / SC.DRIFT * 2 * Math.PI
-        return (mid + amp * cos(phase - Math.PI / 2)).toFloat()
+        return (mid + amp * cos(phase)).toFloat()
     }
 
     fun begin(now: Double, reduced: Boolean) {
         if (t0 >= 0) return
         t0 = now
-        value = if (reduced) SC.REST else 0f
+        // Touch reveals at 0 so the guide can leave from 0 and land on the drift crest.
+        // A fine pointer known at launch, and Reduce Motion, rest at 50 in spring mode.
+        val restAtMid = reduced || fine
+        value = if (restAtMid) SC.REST else 0f
         target = value
-        mode = if (reduced) "spring" else "hold"
+        mode = if (restAtMid) "spring" else "hold"
         seed()
     }
 
