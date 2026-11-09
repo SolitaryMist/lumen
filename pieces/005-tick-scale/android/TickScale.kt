@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -36,7 +37,7 @@ import kotlin.math.roundToInt
    VALUE 0–100, top = 100, bottom = 0 · activeIndex = round(value / 100 * 23)
    NEIGHBOR |Δ|==0 #FFB547 + 28 · |Δ|==1 #6B6B6B + 20 · else #2A2A2A + 16
           Drawn amber length = max(its spring length, the longest other tick).
-   READOUT weight 500, clamp(48dp, 10% width, 88dp), tabular nums, 28dp to the right of the column.
+   READOUT weight 500, clamp(56dp, 14% width, 88dp), tabular nums, 28dp to the right of the column.
            Y follows the continuous value, then the same spring pulls it onto the active tick.
    SPRING value, and a shrinking tick: stiffness 200, damping 24, mass 1, 1/240 s substeps.
           A growing tick: stiffness 320, damping 30, mass 1.
@@ -295,7 +296,7 @@ fun TickScale(modifier: Modifier = Modifier) {
         val lenIdle = with(density) { SC.LEN_IDLE.dp.toPx() }
         val block = label + labelGap + colH + labelGap + label
         val colTop = (hPx - block) / 2f + label + labelGap
-        val numSp = with(density) { min(88.dp, max(48.dp, maxWidth * 0.1f)).toSp() }
+        val numSp = with(density) { min(88.dp, max(56.dp, maxWidth * 0.14f)).toSp() }
 
         LaunchedEffect(reduced) {
             while (true) {
@@ -361,7 +362,7 @@ fun TickScale(modifier: Modifier = Modifier) {
                     else -> SC.idle
                 }
                 Box(Modifier
-                    .offset(x = with(density) { colLeft.toDp() }, y = with(density) { (colTop + center - 1.dp.toPx()).toDp() })
+                    .offset { IntOffset(colLeft.roundToInt(), (colTop + center - 1.dp.toPx()).roundToInt()) }
                     .size(width = with(density) { lenIdle.toDp() }, height = 2.dp)
                     .graphicsLayer {
                         scaleX = sx

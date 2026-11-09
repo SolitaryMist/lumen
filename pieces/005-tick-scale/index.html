@@ -35,7 +35,7 @@ a{color:inherit;text-decoration:none}
 .tick{position:absolute;left:0;top:0;width:16px;height:2px;background:var(--idle);opacity:0;
   transform-origin:left center;will-change:transform,opacity}
 .num{position:absolute;left:84px;top:0;opacity:0;color:var(--fg);
-  font-weight:500;font-size:clamp(48px,10vw,88px);letter-spacing:-0.04em;line-height:1;
+  font-weight:500;font-size:clamp(56px,14vw,88px);letter-spacing:-0.04em;line-height:1;
   font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;font-variation-settings:"wght" 500;
   white-space:nowrap;will-change:transform,opacity}
 </style>
@@ -62,7 +62,7 @@ a{color:inherit;text-decoration:none}
                   amber mark is never shorter than a grey one, on any frame.
    NEIGHBOR       |Δ|==0 amber #FFB547 + 28px · |Δ|==1 #6B6B6B + 20px · else #2A2A2A + 16px
                   (static targets — no extra falloff spring)
-   READOUT        Inter 500, clamp(48px, 10vw, 88px), tracking −0.04em, tabular nums, body color.
+   READOUT        Inter 500, clamp(56px, 14vw, 88px), tracking −0.04em, tabular nums, body color.
                   Sits 28px to the right of the 56px column. Its Y follows the continuous value
                   (same spring) plus a second channel of that spring onto the active tick,
                   so a resting number sits on the lit mark and a moving number never jumps.
@@ -170,6 +170,11 @@ function driftValue(now) {
   return 50 - 30 * Math.cos(phase);
 }
 function smooth(u) { return u * u * (3 - 2 * u); }
+/* Tick top and left land on even device pixels. Thickness stays 2 CSS px. */
+function snapEven(px) {
+  const dpr = window.devicePixelRatio || 1;
+  return Math.round(px * dpr / 2) * 2 / dpr;
+}
 
 const ticksEl = document.getElementById('ticks');
 const stage = document.getElementById('stage');
@@ -317,12 +322,15 @@ function frame(now) {
   for (let i = 0; i < ticks.length; i++) {
     if (i !== active) maxOther = Math.max(maxOther, ticks[i].len * grows[i]);
   }
+  const host = ticksEl.getBoundingClientRect();
+  const snapX = snapEven(host.left) - host.left;
   for (let i = 0; i < ticks.length; i++) {
     const tk = ticks[i];
     const introT = reduced ? 1 : clamp((now - t0 - delays[i]) / P.tickIn, 0, 1);
     const rendered = i === active ? Math.max(tk.len, maxOther) : tk.len * grows[i];
     const center = tickY(i);
-    tk.el.style.transform = `translate3d(0,${(center - 1).toFixed(2)}px,0) scaleX(${(rendered / P.lenIdle).toFixed(4)})`;
+    const snapY = snapEven(host.top + center - 1) - host.top;
+    tk.el.style.transform = `translate3d(${snapX.toFixed(3)}px,${snapY.toFixed(3)}px,0) scaleX(${(rendered / P.lenIdle).toFixed(4)})`;
     tk.el.style.opacity = introT.toFixed(3);
     const col = colorTarget(i, active);
     if (tk.col !== col) { tk.col = col; tk.el.style.background = col; }

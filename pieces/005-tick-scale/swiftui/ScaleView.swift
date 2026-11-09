@@ -10,7 +10,7 @@ import UIKit
    VALUE 0–100, top = 100, bottom = 0 · activeIndex = round(value / 100 * 23)
    NEIGHBOR |Δ|==0 #FFB547 + 28 · |Δ|==1 #6B6B6B + 20 · else #2A2A2A + 16
           Drawn amber length = max(its spring length, the longest other tick).
-   READOUT Inter 500, clamp(48, 10% width, 88), tracking −0.04em, tabular digits, 28pt to the right of the column.
+   READOUT Inter 500, clamp(56, 14% width, 88), tracking −0.04em, tabular digits, 28pt to the right of the column.
            Y follows the continuous value, then the same spring pulls it onto the active tick,
            so a resting number sits on the lit mark and a moving number never jumps. Number stays body color.
    SPRING value, and a shrinking tick: stiffness 200, damping 24, mass 1.
@@ -268,7 +268,7 @@ struct ScaleView: View {
             let colH = min(600, geo.size.height * 0.62)
             let block = 12 + SC.labelGap + colH + SC.labelGap + 12
             let colTop = (geo.size.height - block) / 2 + 12 + SC.labelGap
-            let numSize = min(88, max(48, geo.size.width * 0.1))
+            let numSize = min(88, max(56, geo.size.width * 0.14))
             TimelineView(.animation) { tl in
                 let now = tl.date.timeIntervalSinceReferenceDate
                 let _ = model.step(now: now, colH: colH)
@@ -347,12 +347,12 @@ struct ScaleView: View {
                     .fill(i == active ? SC.amber : abs(i - active) == 1 ? SC.dim : SC.idle)
                     .frame(width: SC.lenIdle, height: 2)
                     .scaleEffect(x: rendered / CGFloat(SC.lenIdle), y: 1, anchor: .leading)
-                    .offset(y: center - 1)
+                    .offset(y: (center - 1).rounded())
                     .opacity(intro)
             }
         }
         .frame(width: SC.colW, height: colH, alignment: .topLeading)
-        .position(x: width / 2, y: colTop + colH / 2)
+        .position(x: (width / 2).rounded(), y: colTop + colH / 2)
     }
 
     private func readout(width: CGFloat, colH: CGFloat, colTop: CGFloat, size: CGFloat) -> some View {
