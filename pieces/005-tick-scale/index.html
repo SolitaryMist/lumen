@@ -54,9 +54,11 @@ a{color:inherit;text-decoration:none}
 </main>
 <script>
 /* ===== Scale parameters (identical in SwiftUI / Compose) =====
-   TICKS          24 horizontal marks. Column height min(600px, 62vh), column width 56px.
-                  Idle 16×2, neighbor 20×2, active 28×2. Length animates with scaleX
-                  (origin left). Value domain 0–100. Top of the column is 100, bottom is 0.
+   TICKS          24 horizontal marks. Target column min(600px, 62vh), width 56px.
+                  Pitch = floor(target / 23 × dpr / 2) × 2 / dpr. Drawn height is pitch × 23.
+                  Tick tops sit at a column top snapped to an even device pixel, then i × pitch,
+                  so all 23 gaps match. Idle 16×2, neighbor 20×2, active 28×2. Length animates
+                  with scaleX (origin left). Value domain 0–100. Top of the column is 100, bottom is 0.
    ACTIVE         activeIndex = round(value / 100 * 23), clamped 0…23. Exactly one tick is amber.
                   Its drawn length is max(its spring length, the longest other tick), so the
                   amber mark is never shorter than a grey one, on any frame.
@@ -170,7 +172,7 @@ function driftValue(now) {
   return 50 - 30 * Math.cos(phase);
 }
 function smooth(u) { return u * u * (3 - 2 * u); }
-/* Tick top and left land on even device pixels. Thickness stays 2 CSS px. */
+/* Even device pixels. Thickness stays 2 CSS px; pitch itself is a multiple of 2 device px. */
 function snapEven(px) {
   const dpr = window.devicePixelRatio || 1;
   return Math.round(px * dpr / 2) * 2 / dpr;
@@ -208,7 +210,7 @@ let yOff = 0, yOffV = 0;
 let target = value;
 let mode = fine || reduced ? 'spring' : 'hold';
 let shown = null;
-let colTop = 0, colH = 600;
+let colTop = 0, colH = 600, pitch = 0, snapShift = 0, colLeftShift = 0;
 let t0 = 0, scanT0 = 0, driftT0 = 0, blendT0 = 0, blendFrom = P.rest;
 let touching = false, touchId = null;
 let last = 0, started = false;
@@ -222,20 +224,37 @@ function seedLengths() {
 }
 seedLengths();
 
-function measure() {
-  const r = ticksEl.getBoundingClientRect();
-  colTop = r.top;
-  colH = r.height || Math.min(600, innerHeight * 0.62);
+/* Pitch from the 62vh target, then the column is pitch × 23. Tops share one snapped origin. */
+function layoutColumn() {
+  const dpr = window.devicePixelRatio || 1;
+  const gaps = P.ticks - 1;
+  const target = Math.min(600, innerHeight * 0.62);
+  const pitchDev = Math.max(2, Math.floor(target / gaps * dpr / 2) * 2);
+  pitch = pitchDev / dpr;
+  colH = pitch * gaps;
+  const h = colH + 'px';
+  if (ticksEl.style.height !== h) ticksEl.style.height = h;
+  const host = ticksEl.getBoundingClientRect();
+  colTop = host.top;
+  const topDev = Math.round(host.top * dpr / 2) * 2;
+  snapShift = topDev / dpr - host.top;
+  colLeftShift = snapEven(host.left) - host.left;
 }
+function measure() { layoutColumn(); }
 function valueFromY(y) {
   if (colH <= 0) return P.rest;
-  return clamp((1 - (y - colTop) / colH) * 100, P.vmin, P.vmax);
+  const topCenter = colTop + snapShift + 1;
+  return clamp((1 - (y - topCenter) / colH) * 100, P.vmin, P.vmax);
+}
+/* Centers. k = 0 is the top tick (value 100). The stroke top is one px above the center. */
+function centerFromK(k) {
+  return snapShift + k * pitch + 1;
 }
 function yFromValue(v) {
-  return (1 - clamp(v, P.vmin, P.vmax) / 100) * colH;
+  return centerFromK((1 - clamp(v, P.vmin, P.vmax) / 100) * (P.ticks - 1));
 }
 function tickY(i) {
-  return (1 - i / (P.ticks - 1)) * colH;
+  return centerFromK((P.ticks - 1) - i);
 }
 /* How far the value's Y sits from the active tick. Sprung, never assigned in a jump. */
 function alignTarget(v, active) {
@@ -305,6 +324,7 @@ function frame(now) {
     value = P.rest; vvel = 0; target = P.rest;
   }
 
+  layoutColumn();
   const active = activeIndex(value);
   const offT = alignTarget(value, active);
   if (reduced) { yOff = offT; yOffV = 0; }
@@ -322,15 +342,12 @@ function frame(now) {
   for (let i = 0; i < ticks.length; i++) {
     if (i !== active) maxOther = Math.max(maxOther, ticks[i].len * grows[i]);
   }
-  const host = ticksEl.getBoundingClientRect();
-  const snapX = snapEven(host.left) - host.left;
   for (let i = 0; i < ticks.length; i++) {
     const tk = ticks[i];
     const introT = reduced ? 1 : clamp((now - t0 - delays[i]) / P.tickIn, 0, 1);
     const rendered = i === active ? Math.max(tk.len, maxOther) : tk.len * grows[i];
-    const center = tickY(i);
-    const snapY = snapEven(host.top + center - 1) - host.top;
-    tk.el.style.transform = `translate3d(${snapX.toFixed(3)}px,${snapY.toFixed(3)}px,0) scaleX(${(rendered / P.lenIdle).toFixed(4)})`;
+    const strokeTop = snapShift + ((P.ticks - 1) - i) * pitch;
+    tk.el.style.transform = `translate3d(${colLeftShift}px,${strokeTop}px,0) scaleX(${(rendered / P.lenIdle).toFixed(4)})`;
     tk.el.style.opacity = introT.toFixed(3);
     const col = colorTarget(i, active);
     if (tk.col !== col) { tk.col = col; tk.el.style.background = col; }

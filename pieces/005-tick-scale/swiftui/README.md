@@ -2,7 +2,7 @@
 
 Drop `ScaleView.swift` into an iOS 16+ SwiftUI target and bundle **Inter Variable** (add it to `UIAppFonts`; the name used is `Inter Variable`). Labels use **JetBrains Mono** at 12pt when that face is installed.
 
-- 24 ticks in a column `min(600, 62% of height)` wide by 56pt. Idle 16×2, neighbor 20×2, active 28×2. Length is `scaleEffect` from the leading edge. The amber tick's drawn length is `max(its spring length, the longest other tick)`.
+- 24 ticks in a column 56pt wide. The pitch is `floor(min(600, 62% of height) / 23)` whole points and the column is that pitch times 23, so every gap matches. Idle 16×2, neighbor 20×2, active 28×2. Length is `scaleEffect` from the leading edge. The amber tick's drawn length is `max(its spring length, the longest other tick)`.
 - Value domain 0–100. The top of the column is 100, the bottom is 0. `activeIndex = round(value / 100 * 23)`.
 - The value spring, and a tick that is shrinking, use stiffness 200, damping 24, mass 1. A tick that is growing uses stiffness 320, damping 30, mass 1. Same 1/240 s semi-implicit Euler step as web and Compose. Platform form: `.spring(response: 0.36, dampingFraction: 0.78)` and, for a growing length, `.spring(response: 0.35, dampingFraction: 0.84)`.
 - The readout is Inter at weight 500, size `clamp(56, 14% of width, 88)`, tabular digits. Its vertical center follows the continuous value, then the same spring settles it onto the active tick, so it never jumps from mark to mark. Amber is only the active tick; the number stays the body color.

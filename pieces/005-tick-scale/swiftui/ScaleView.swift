@@ -6,7 +6,9 @@ import UIKit
 #endif
 
 /* ===== Scale parameters (identical to web / Compose) =====
-   TICKS 24 · column min(600, 62% of height) × 56 · idle 16×2, neighbor 20×2, active 28×2
+   TICKS 24 · target column min(600, 62% of height) × 56. Pitch is floor(target / 23) whole points;
+          drawn height is pitch × 23. Tick i is columnTop + i × pitch, top rounded to a whole point.
+          Idle 16×2, neighbor 20×2, active 28×2
    VALUE 0–100, top = 100, bottom = 0 · activeIndex = round(value / 100 * 23)
    NEIGHBOR |Δ|==0 #FFB547 + 28 · |Δ|==1 #6B6B6B + 20 · else #2A2A2A + 16
           Drawn amber length = max(its spring length, the longest other tick).
@@ -180,7 +182,7 @@ final class ScaleModel {
     func pointer(y: CGFloat, colTop: CGFloat, colH: CGFloat, inside: Bool, now: Double) {
         fine = true
         if mode == .hold || mode == .scan || mode == .drift || mode == .blend { mode = .spring }
-        target = inside ? min(SC.vmax, max(SC.vmin, (1 - Double((y - colTop) / colH)) * 100)) : SC.rest
+        target = inside ? min(SC.vmax, max(SC.vmin, (1 - Double((y - (colTop + 1)) / colH)) * 100)) : SC.rest
         if t0 == 0 { boot(now: now) }
     }
 
@@ -188,7 +190,7 @@ final class ScaleModel {
         if fine || reduced { return }
         if down {
             mode = .spring
-            target = min(SC.vmax, max(SC.vmin, (1 - Double((y - colTop) / colH)) * 100))
+            target = min(SC.vmax, max(SC.vmin, (1 - Double((y - (colTop + 1)) / colH)) * 100))
         } else if mode == .spring {
             if driftT0 == 0 { driftT0 = now }
             blendFrom = value
@@ -230,6 +232,7 @@ final class ScaleModel {
             }
         }
         let active = activeIndex(value)
+        // colH is pitch × 23, so this offset is the new pitch.
         let offT = (value / 100 - Double(active) / Double(SC.ticks - 1)) * Double(colH)
         if reduced || dt == 0 { yOff = offT; yOffV = 0 }
         else { spring(&yOff, &yOffV, to: offT, dt: dt) }
@@ -265,9 +268,11 @@ struct ScaleView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let colH = min(600, geo.size.height * 0.62)
+            let targetH = min(600, geo.size.height * 0.62)
+            let pitch = max(1, (targetH / CGFloat(SC.ticks - 1)).rounded(.down))
+            let colH = pitch * CGFloat(SC.ticks - 1)
             let block = 12 + SC.labelGap + colH + SC.labelGap + 12
-            let colTop = (geo.size.height - block) / 2 + 12 + SC.labelGap
+            let colTop = ((geo.size.height - block) / 2 + 12 + SC.labelGap).rounded()
             let numSize = min(88, max(56, geo.size.width * 0.14))
             TimelineView(.animation) { tl in
                 let now = tl.date.timeIntervalSinceReferenceDate
@@ -287,7 +292,7 @@ struct ScaleView: View {
                     .position(x: geo.size.width / 2, y: geo.size.height / 2)
                     .opacity(model.stageOpacity)
 
-                    tickLayer(width: geo.size.width, colH: colH, colTop: colTop, now: now)
+                    tickLayer(width: geo.size.width, colH: colH, colTop: colTop, pitch: pitch, now: now)
                         .opacity(model.stageOpacity)
                     readout(width: geo.size.width, colH: colH, colTop: colTop, size: numSize)
                         .opacity(model.stageOpacity * model.numberOpacity)
@@ -327,7 +332,7 @@ struct ScaleView: View {
         .foregroundStyle(SC.dim)
     }
 
-    private func tickLayer(width: CGFloat, colH: CGFloat, colTop: CGFloat, now: Double) -> some View {
+    private func tickLayer(width: CGFloat, colH: CGFloat, colTop: CGFloat, pitch: CGFloat, now: Double) -> some View {
         let active = activeIndex(model.value)
         let grows: [CGFloat] = (0..<SC.ticks).map { i in
             let intro = model.intro(i, now)
@@ -342,12 +347,12 @@ struct ScaleView: View {
             ForEach(0..<SC.ticks, id: \.self) { i in
                 let intro = model.intro(i, now)
                 let rendered = i == active ? activeRendered : CGFloat(model.lens[i]) * grows[i]
-                let center = (1 - CGFloat(i) / CGFloat(SC.ticks - 1)) * colH
+                let fromTop = CGFloat(SC.ticks - 1 - i)
                 Rectangle()
                     .fill(i == active ? SC.amber : abs(i - active) == 1 ? SC.dim : SC.idle)
                     .frame(width: SC.lenIdle, height: 2)
                     .scaleEffect(x: rendered / CGFloat(SC.lenIdle), y: 1, anchor: .leading)
-                    .offset(y: (center - 1).rounded())
+                    .offset(y: fromTop * pitch)
                     .opacity(intro)
             }
         }
@@ -357,7 +362,7 @@ struct ScaleView: View {
 
     private func readout(width: CGFloat, colH: CGFloat, colTop: CGFloat, size: CGFloat) -> some View {
         let base = (1 - CGFloat(min(SC.vmax, max(SC.vmin, model.value))) / 100) * colH
-        let y = colTop + base + CGFloat(model.yOff)
+        let y = colTop + base + 1 + CGFloat(model.yOff)
         let n = Int(min(SC.vmax, max(SC.vmin, model.value)).rounded())
         let slot = size * 2
         return Text("\(n)")

@@ -28,12 +28,15 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
 /* ===== Scale parameters (identical to web / SwiftUI) =====
-   TICKS 24 · column min(600dp, 62% of height) × 56dp · idle 16×2, neighbor 20×2, active 28×2
+   TICKS 24 · target column min(600dp, 62% of height) × 56dp. Pitch is floor(targetPx / 23) whole px;
+          drawn height is pitch × 23. Tick i is columnTop + i × pitch, top rounded to a whole px.
+          Idle 16×2, neighbor 20×2, active 28×2
    VALUE 0–100, top = 100, bottom = 0 · activeIndex = round(value / 100 * 23)
    NEIGHBOR |Δ|==0 #FFB547 + 28 · |Δ|==1 #6B6B6B + 20 · else #2A2A2A + 16
           Drawn amber length = max(its spring length, the longest other tick).
@@ -248,6 +251,7 @@ private class Sim {
         }
         val active = activeIndex(value)
         val dt = dtMs / 1000f
+        // colH is pitch × 23, so this offset is the new pitch.
         val offT = (value / 100f - active / (SC.TICKS - 1f)) * colH
         if (reduced || dt == 0f) { yOff = offT; yOffV = 0f }
         else {
@@ -287,15 +291,17 @@ fun TickScale(modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.fillMaxSize().background(SC.bg)) {
         val hPx = constraints.maxHeight.toFloat()
         val wPx = constraints.maxWidth.toFloat()
-        val colH = min(with(density) { 600.dp.toPx() }, hPx * 0.62f)
-        val liveCol = rememberUpdatedState(colH)
         val label = with(density) { 12.dp.toPx() }
         val labelGap = with(density) { SC.LABEL_GAP.dp.toPx() }
         val colW = with(density) { SC.COL_W.dp.toPx() }
         val gap = with(density) { SC.GAP.dp.toPx() }
         val lenIdle = with(density) { SC.LEN_IDLE.dp.toPx() }
+        val targetH = min(with(density) { 600.dp.toPx() }, hPx * 0.62f)
+        val pitch = floor(targetH / (SC.TICKS - 1f)).coerceAtLeast(1f)
+        val colH = pitch * (SC.TICKS - 1f)
+        val liveCol = rememberUpdatedState(colH)
         val block = label + labelGap + colH + labelGap + label
-        val colTop = (hPx - block) / 2f + label + labelGap
+        val colTop = ((hPx - block) / 2f + label + labelGap).roundToInt().toFloat()
         val numSp = with(density) { min(88.dp, max(56.dp, maxWidth * 0.14f)).toSp() }
 
         LaunchedEffect(reduced) {
@@ -321,7 +327,7 @@ fun TickScale(modifier: Modifier = Modifier) {
                     val event = awaitPointerEvent()
                     val change = event.changes.firstOrNull() ?: continue
                     val y = change.position.y
-                    val mapped = ((1f - (y - colTop) / colH) * 100f).coerceIn(0f, 100f)
+                    val mapped = ((1f - (y - (colTop + 1f)) / colH) * 100f).coerceIn(0f, 100f)
                     val mouse = change.type == PointerType.Mouse
                     if (event.type == PointerEventType.Exit && sim.fine) { sim.target = SC.REST; continue }
                     if (mouse) {
@@ -354,7 +360,7 @@ fun TickScale(modifier: Modifier = Modifier) {
             for (i in 0 until SC.TICKS) {
                 val intro = if (reduced) 1f else ((sim.now - sim.t0 - sim.delays[i]) / SC.TICK_IN).toFloat().coerceIn(0f, 1f)
                 val rendered = if (i == active) activeRendered else sim.len[i] * grows[i]
-                val center = (1f - i / (SC.TICKS - 1f)) * colH
+                val fromTop = (SC.TICKS - 1 - i).toFloat()
                 val sx = rendered / SC.LEN_IDLE
                 val color = when {
                     i == active -> SC.amber
@@ -362,7 +368,7 @@ fun TickScale(modifier: Modifier = Modifier) {
                     else -> SC.idle
                 }
                 Box(Modifier
-                    .offset { IntOffset(colLeft.roundToInt(), (colTop + center - 1.dp.toPx()).roundToInt()) }
+                    .offset { IntOffset(colLeft.roundToInt(), (colTop + fromTop * pitch).roundToInt()) }
                     .size(width = with(density) { lenIdle.toDp() }, height = 2.dp)
                     .graphicsLayer {
                         scaleX = sx
@@ -371,7 +377,7 @@ fun TickScale(modifier: Modifier = Modifier) {
                     }
                     .background(color))
             }
-            val ny = colTop + (1f - sim.value.coerceIn(0f, 100f) / 100f) * colH + sim.yOff
+            val ny = colTop + (1f - sim.value.coerceIn(0f, 100f) / 100f) * colH + 1f + sim.yOff
             Text(
                 sim.value.coerceIn(0f, 100f).roundToInt().toString(),
                 color = SC.fg,
