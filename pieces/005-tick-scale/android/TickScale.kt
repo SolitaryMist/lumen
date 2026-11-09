@@ -32,18 +32,22 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /* ===== Scale parameters (identical to web / SwiftUI) =====
-   TICKS 24 · column min(420dp, 56% of height) × 56dp · idle 16×2, neighbor 20×2, active 28×2
+   TICKS 24 · column min(600dp, 62% of height) × 56dp · idle 16×2, neighbor 20×2, active 28×2
    VALUE 0–100, top = 100, bottom = 0 · activeIndex = round(value / 100 * 23)
    NEIGHBOR |Δ|==0 #FFB547 + 28 · |Δ|==1 #6B6B6B + 20 · else #2A2A2A + 16
-   READOUT weight 500, tabular nums, 28dp to the right of the column.
+          Drawn amber length = max(its spring length, the longest other tick).
+   READOUT weight 500, clamp(48dp, 10% width, 88dp), tabular nums, 28dp to the right of the column.
            Y follows the continuous value, then the same spring pulls it onto the active tick.
-   SPRING stiffness 200, damping 24, mass 1, 1/240 s substeps.
+   SPRING value, and a shrinking tick: stiffness 200, damping 24, mass 1, 1/240 s substeps.
+          A growing tick: stiffness 320, damping 30, mass 1.
           Compose form: spring(dampingRatio = 0.78f, stiffness = 200f)
+          Growing length: spring(dampingRatio = 0.84f, stiffness = 320f)
           SwiftUI form: .spring(response = 0.36, dampingFraction = 0.78)
-   GUIDE  no fine pointer: 1400ms 0→100→80, cubic-bezier(0.65, 0, 0.35, 1). The second leg
-          lands on driftHi. Drift is mid + amp·cos(ωt), mid 50, amp 30, period 8000ms,
-          so t=0 sits at 80 with zero velocity (range 20–80). A press drives the spring
-          target; release blends back over 300ms.
+          Growing length: .spring(response = 0.35, dampingFraction = 0.84)
+   GUIDE  no fine pointer: 1400ms 0→100→20. First leg 760ms, second 640ms, each
+          cubic-bezier(0.65, 0, 0.35, 1). Drift is 50 − 30·cos(ωt), period 8000ms,
+          driftT0 = scanT0 + 1400, so t=0 sits at 20 with zero velocity and turns upward.
+          A press drives the spring target; release blends back over 300ms.
    FINE   Known at launch when an input device advertises SOURCE_MOUSE, SOURCE_MOUSE_RELATIVE,
           or SOURCE_TOUCHPAD. Those rest at 50 in spring mode. Touch alone runs the guide.
    INTRO  160ms stage · ticks from the center outward, 40ms apart, scale 0.6→1 + alpha, 160ms
@@ -62,15 +66,21 @@ private object SC {
     const val LABEL_GAP = 48f
     const val STIFFNESS = 200f
     const val DAMPING = 24f
+    const val STIFFNESS_GROW = 320f
+    const val DAMPING_GROW = 30f
     const val MASS = 1f
     const val RESPONSE = 0.36f
     const val DAMPING_FRACTION = 0.78f
+    const val RESPONSE_GROW = 0.35f
+    const val DAMPING_FRACTION_GROW = 0.84f
     const val STAGE = 160.0
     const val STAGGER = 40.0
     const val TICK_IN = 160.0
     const val NUM_FADE = 120.0
     const val TICK_FROM = 0.6f
     const val SCAN = 1400.0
+    const val SCAN_UP = 760.0
+    const val SCAN_DOWN = 640.0
     const val DRIFT = 8000.0
     const val DRIFT_LO = 20.0
     const val DRIFT_HI = 80.0
@@ -78,6 +88,7 @@ private object SC {
     const val SETTLE = 0.25f
     val INTRO_SPAN = (TICKS - 1) * STAGGER
     val motion = androidx.compose.animation.core.spring<Float>(dampingRatio = DAMPING_FRACTION, stiffness = STIFFNESS)
+    val motionGrow = androidx.compose.animation.core.spring<Float>(dampingRatio = DAMPING_FRACTION_GROW, stiffness = STIFFNESS_GROW)
     val easeSoft = androidx.compose.animation.core.CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
     val easeGuide = androidx.compose.animation.core.CubicBezierEasing(0.65f, 0f, 0.35f, 1f)
     val bg = Color(0xFF0B0B0C)
@@ -163,25 +174,40 @@ private class Sim {
         return p to v
     }
 
-    private fun scan(elapsed: Double): Float {
-        val half = SC.SCAN / 2
-        val hi = SC.DRIFT_HI.toFloat()
-        return if (elapsed <= half) 100f * SC.easeGuide.transform((elapsed / half).toFloat())
-        else 100f + (hi - 100f) * SC.easeGuide.transform(((elapsed - half) / half).toFloat())
+    private fun lengthSpring(pos: Float, vel: Float, to: Float, dt: Float): Pair<Float, Float> {
+        var p = pos
+        var v = vel
+        if (dt > 0f) {
+            val n = max(1, (dt * 240f).roundToInt())
+            val h = dt / n
+            repeat(n) {
+                val grow = to > p
+                val k = if (grow) SC.STIFFNESS_GROW else SC.STIFFNESS
+                val c = if (grow) SC.DAMPING_GROW else SC.DAMPING
+                v += (-k * (p - to) - c * v) * h
+                p += v * h
+            }
+        }
+        if (abs(p - to) < SC.SETTLE && abs(v) < 40f) { p = to; v = 0f }
+        return p to v
     }
 
-    /** mid 50, amp 30. cos(ωt) is 1 at t=0, so the handoff sits at driftHi with zero velocity. */
+    private fun scan(elapsed: Double): Float {
+        val lo = SC.DRIFT_LO.toFloat()
+        return if (elapsed <= SC.SCAN_UP) 100f * SC.easeGuide.transform((elapsed / SC.SCAN_UP).toFloat())
+        else 100f + (lo - 100f) * SC.easeGuide.transform(((elapsed - SC.SCAN_UP) / SC.SCAN_DOWN).toFloat())
+    }
+
+    /** 50 − 30·cos(ωt). At t=0 this is 20 with zero velocity, then it turns upward. */
     private fun drift(now: Double): Float {
-        val amp = (SC.DRIFT_HI - SC.DRIFT_LO) / 2
-        val mid = (SC.DRIFT_HI + SC.DRIFT_LO) / 2
         val phase = (now - driftT0) / SC.DRIFT * 2 * Math.PI
-        return (mid + amp * cos(phase)).toFloat()
+        return (50.0 - 30.0 * cos(phase)).toFloat()
     }
 
     fun begin(now: Double, reduced: Boolean) {
         if (t0 >= 0) return
         t0 = now
-        // Touch reveals at 0 so the guide can leave from 0 and land on the drift crest.
+        // Touch reveals at 0 so the guide can leave from 0 and land on 20, where the drift turns upward.
         // A fine pointer known at launch, and Reduce Motion, rest at 50 in spring mode.
         val restAtMid = reduced || fine
         value = if (restAtMid) SC.REST else 0f
@@ -231,7 +257,7 @@ private class Sim {
             val goal = lenTarget(i, active)
             if (reduced) { len[i] = goal; lvel[i] = 0f }
             else if (dt > 0f) {
-                val s = spring(len[i], lvel[i], goal, dt)
+                val s = lengthSpring(len[i], lvel[i], goal, dt)
                 len[i] = s.first; lvel[i] = s.second
             }
         }
@@ -260,7 +286,7 @@ fun TickScale(modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.fillMaxSize().background(SC.bg)) {
         val hPx = constraints.maxHeight.toFloat()
         val wPx = constraints.maxWidth.toFloat()
-        val colH = min(with(density) { 420.dp.toPx() }, hPx * 0.56f)
+        val colH = min(with(density) { 600.dp.toPx() }, hPx * 0.62f)
         val liveCol = rememberUpdatedState(colH)
         val label = with(density) { 12.dp.toPx() }
         val labelGap = with(density) { SC.LABEL_GAP.dp.toPx() }
@@ -269,7 +295,7 @@ fun TickScale(modifier: Modifier = Modifier) {
         val lenIdle = with(density) { SC.LEN_IDLE.dp.toPx() }
         val block = label + labelGap + colH + labelGap + label
         val colTop = (hPx - block) / 2f + label + labelGap
-        val numSp = with(density) { min(72.dp, max(48.dp, maxWidth * 0.1f)).toSp() }
+        val numSp = with(density) { min(88.dp, max(48.dp, maxWidth * 0.1f)).toSp() }
 
         LaunchedEffect(reduced) {
             while (true) {
@@ -317,11 +343,18 @@ fun TickScale(modifier: Modifier = Modifier) {
                 modifier = Modifier.offset(x = with(density) { colLeft.toDp() }, y = with(density) { (colTop - labelGap - label).toDp() }).width(with(density) { colW.toDp() }))
             Text("SCALE", color = SC.dim, fontSize = 12.sp, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center,
                 modifier = Modifier.offset(x = with(density) { colLeft.toDp() }, y = with(density) { (colTop + colH + labelGap).toDp() }).width(with(density) { colW.toDp() }))
+            val grows = FloatArray(SC.TICKS) { i ->
+                val intro = if (reduced) 1f else ((sim.now - sim.t0 - sim.delays[i]) / SC.TICK_IN).toFloat().coerceIn(0f, 1f)
+                SC.TICK_FROM + (1f - SC.TICK_FROM) * SC.easeSoft.transform(intro)
+            }
+            var maxOther = 0f
+            for (i in 0 until SC.TICKS) if (i != active) maxOther = max(maxOther, sim.len[i] * grows[i])
+            val activeRendered = max(sim.len[active], maxOther)
             for (i in 0 until SC.TICKS) {
                 val intro = if (reduced) 1f else ((sim.now - sim.t0 - sim.delays[i]) / SC.TICK_IN).toFloat().coerceIn(0f, 1f)
-                val grow = SC.TICK_FROM + (1f - SC.TICK_FROM) * SC.easeSoft.transform(intro)
+                val rendered = if (i == active) activeRendered else sim.len[i] * grows[i]
                 val center = (1f - i / (SC.TICKS - 1f)) * colH
-                val sx = sim.len[i] / SC.LEN_IDLE * grow
+                val sx = rendered / SC.LEN_IDLE
                 val color = when {
                     i == active -> SC.amber
                     abs(i - active) == 1 -> SC.dim

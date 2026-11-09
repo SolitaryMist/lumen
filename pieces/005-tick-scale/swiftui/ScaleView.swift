@@ -6,19 +6,23 @@ import UIKit
 #endif
 
 /* ===== Scale parameters (identical to web / Compose) =====
-   TICKS 24 · column min(420, 56% of height) × 56 · idle 16×2, neighbor 20×2, active 28×2
+   TICKS 24 · column min(600, 62% of height) × 56 · idle 16×2, neighbor 20×2, active 28×2
    VALUE 0–100, top = 100, bottom = 0 · activeIndex = round(value / 100 * 23)
    NEIGHBOR |Δ|==0 #FFB547 + 28 · |Δ|==1 #6B6B6B + 20 · else #2A2A2A + 16
-   READOUT Inter 500, clamp(48, 10% width, 72), tracking −0.04em, tabular digits, 28pt to the right of the column.
+          Drawn amber length = max(its spring length, the longest other tick).
+   READOUT Inter 500, clamp(48, 10% width, 88), tracking −0.04em, tabular digits, 28pt to the right of the column.
            Y follows the continuous value, then the same spring pulls it onto the active tick,
            so a resting number sits on the lit mark and a moving number never jumps. Number stays body color.
-   SPRING stiffness 200, damping 24, mass 1. Settle within 0.25 so a return to 50 does not chatter the boundary.
+   SPRING value, and a shrinking tick: stiffness 200, damping 24, mass 1.
+          A growing tick: stiffness 320, damping 30, mass 1.
+          Settle within 0.25 so a return to 50 does not chatter the boundary.
           Platform form: .spring(response: 0.36, dampingFraction: 0.78)
-          Compose form: spring(dampingRatio: 0.78, stiffness: 200)
-   GUIDE  no fine pointer: 1400ms 0→100→80, cubic-bezier(0.65, 0, 0.35, 1). The second leg
-          lands on driftHi. Drift is mid + amp·cos(ωt), mid 50, amp 30, period 8000ms,
-          so t=0 sits at 80 with zero velocity (range 20–80). Touch sets the spring target;
-          release blends back over 300ms.
+          Growing length: .spring(response: 0.35, dampingFraction: 0.84)
+          Compose form: spring(dampingRatio: 0.78, stiffness: 200), grow spring(dampingRatio: 0.84, stiffness: 320)
+   GUIDE  no fine pointer: 1400ms 0→100→20. First leg 760ms, second 640ms, each
+          cubic-bezier(0.65, 0, 0.35, 1). Drift is 50 − 30·cos(ωt), period 8000ms,
+          driftT0 = scanT0 + 1400, so t=0 sits at 20 with zero velocity and turns upward.
+          Touch sets the spring target; release blends back over 300ms.
    FINE   Known at launch on macOS, Mac Catalyst, and iPad (pointer support). Those rest at 50
           in spring mode. A phone waits out the reveal, then runs the guide.
    INTRO  stage 160ms linear · ticks from the center outward, 40ms apart, scale 0.6→1 + opacity, 160ms
@@ -32,15 +36,20 @@ enum SC {
     static let lenIdle = 16.0, lenNear = 20.0, lenActive = 28.0
     static let colW: CGFloat = 56, gap: CGFloat = 28, labelGap: CGFloat = 48
     static let stiffness = 200.0, damping = 24.0, mass = 1.0
+    static let stiffnessGrow = 320.0, dampingGrow = 30.0
     static let response = 0.36, dampingFraction = 0.78
+    static let responseGrow = 0.35, dampingFractionGrow = 0.84
     static let composeDamping = 0.78, composeStiffness = 200.0
+    static let composeDampingGrow = 0.84, composeStiffnessGrow = 320.0
     static let stageFade = 0.160, stagger = 0.040, tickIn = 0.160, numFade = 0.120, tickFrom = 0.6
-    static let scanDur = 1.400, driftPeriod = 8.0, driftLo = 20.0, driftHi = 80.0, resume = 0.300
+    static let scanDur = 1.400, scanUp = 0.760, scanDown = 0.640
+    static let driftPeriod = 8.0, driftLo = 20.0, driftHi = 80.0, resume = 0.300
     static let settle = 0.25
     static let introSpan = Double(ticks - 1) * stagger
     static let bg = Color(hex: 0x0B0B0C), fg = Color(hex: 0xEDEDED), dim = Color(hex: 0x6B6B6B)
     static let idle = Color(hex: 0x2A2A2A), amber = Color(hex: 0xFFB547)
     static let springAnim = Animation.spring(response: response, dampingFraction: dampingFraction)
+    static let springGrow = Animation.spring(response: responseGrow, dampingFraction: dampingFractionGrow)
 }
 
 extension Color {
@@ -118,7 +127,7 @@ final class ScaleModel {
         guard !booted else { return }
         booted = true
         t0 = now
-        // Touch reveals at 0 so the guide can leave from 0 and land on the drift crest.
+        // Touch reveals at 0 so the guide can leave from 0 and land on 20, where the drift turns upward.
         // A fine pointer known at launch, and Reduce Motion, rest at 50 in spring mode.
         let restAtMid = reduced || fine
         value = restAtMid ? SC.rest : SC.vmin
@@ -144,16 +153,27 @@ final class ScaleModel {
     }
 
     func scan(_ elapsed: Double) -> Double {
-        let half = SC.scanDur / 2
-        if elapsed <= half { return SC.vmax * easeGuide(elapsed / half) }
-        return SC.vmax + (SC.driftHi - SC.vmax) * easeGuide((elapsed - half) / half)
+        if elapsed <= SC.scanUp { return SC.vmax * easeGuide(elapsed / SC.scanUp) }
+        return SC.vmax + (SC.driftLo - SC.vmax) * easeGuide((elapsed - SC.scanUp) / SC.scanDown)
     }
-    /// mid 50, amp 30. cos(ωt) is 1 at t=0, so the handoff sits at driftHi with zero velocity.
+    /// 50 − 30·cos(ωt). At t=0 this is 20 with zero velocity, then it turns upward.
     func drift(_ now: Double) -> Double {
-        let amp = (SC.driftHi - SC.driftLo) / 2
-        let mid = (SC.driftHi + SC.driftLo) / 2
         let phase = (now - driftT0) / SC.driftPeriod * 2 * .pi
-        return mid + amp * cos(phase)
+        return 50 - 30 * cos(phase)
+    }
+    /// Extending a tick uses 320/30. Contracting keeps 200/24. Chosen per substep.
+    func lengthSpring(_ pos: inout Double, _ vel: inout Double, to target: Double, dt: Double) {
+        let n = max(1, Int((dt * 240).rounded())), h = dt / Double(n)
+        if dt > 0 {
+            for _ in 0..<n {
+                let grow = target > pos
+                let k = grow ? SC.stiffnessGrow : SC.stiffness
+                let c = grow ? SC.dampingGrow : SC.damping
+                vel += (-k * (pos - target) - c * vel) * h
+                pos += vel * h
+            }
+        }
+        if abs(pos - target) < SC.settle && abs(vel) < 40 { pos = target; vel = 0 }
     }
     func smooth(_ u: Double) -> Double { u * u * (3 - 2 * u) }
 
@@ -218,7 +238,7 @@ final class ScaleModel {
             if reduced { lens[i] = goal; lvel[i] = 0 }
             else if dt > 0 {
                 var p = lens[i], v = lvel[i]
-                spring(&p, &v, to: goal, dt: dt)
+                lengthSpring(&p, &v, to: goal, dt: dt)
                 lens[i] = p; lvel[i] = v
             }
         }
@@ -245,10 +265,10 @@ struct ScaleView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let colH = min(420, geo.size.height * 0.56)
+            let colH = min(600, geo.size.height * 0.62)
             let block = 12 + SC.labelGap + colH + SC.labelGap + 12
             let colTop = (geo.size.height - block) / 2 + 12 + SC.labelGap
-            let numSize = min(72, max(48, geo.size.width * 0.1))
+            let numSize = min(88, max(48, geo.size.width * 0.1))
             TimelineView(.animation) { tl in
                 let now = tl.date.timeIntervalSinceReferenceDate
                 let _ = model.step(now: now, colH: colH)
@@ -309,15 +329,24 @@ struct ScaleView: View {
 
     private func tickLayer(width: CGFloat, colH: CGFloat, colTop: CGFloat, now: Double) -> some View {
         let active = activeIndex(model.value)
+        let grows: [CGFloat] = (0..<SC.ticks).map { i in
+            let intro = model.intro(i, now)
+            return CGFloat(SC.tickFrom + (1 - SC.tickFrom) * easeSoft(intro))
+        }
+        var maxOther: CGFloat = 0
+        for i in 0..<SC.ticks where i != active {
+            maxOther = max(maxOther, CGFloat(model.lens[i]) * grows[i])
+        }
+        let activeRendered = max(CGFloat(model.lens[active]), maxOther)
         return ZStack(alignment: .topLeading) {
             ForEach(0..<SC.ticks, id: \.self) { i in
                 let intro = model.intro(i, now)
-                let grow = SC.tickFrom + (1 - SC.tickFrom) * easeSoft(intro)
+                let rendered = i == active ? activeRendered : CGFloat(model.lens[i]) * grows[i]
                 let center = (1 - CGFloat(i) / CGFloat(SC.ticks - 1)) * colH
                 Rectangle()
                     .fill(i == active ? SC.amber : abs(i - active) == 1 ? SC.dim : SC.idle)
                     .frame(width: SC.lenIdle, height: 2)
-                    .scaleEffect(x: CGFloat(model.lens[i] / SC.lenIdle * grow), y: 1, anchor: .leading)
+                    .scaleEffect(x: rendered / CGFloat(SC.lenIdle), y: 1, anchor: .leading)
                     .offset(y: center - 1)
                     .opacity(intro)
             }

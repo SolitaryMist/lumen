@@ -31,11 +31,11 @@ a{color:inherit;text-decoration:none}
   font:400 12px/12px "JetBrains Mono",ui-monospace,monospace;letter-spacing:0.14em;color:var(--dim)}
 .cap.foot{margin-top:48px}
 .cap:not(.foot){margin-bottom:48px}
-.ticks{position:relative;width:56px;height:min(420px,56vh)}
+.ticks{position:relative;width:56px;height:min(600px,62vh)}
 .tick{position:absolute;left:0;top:0;width:16px;height:2px;background:var(--idle);opacity:0;
   transform-origin:left center;will-change:transform,opacity}
 .num{position:absolute;left:84px;top:0;opacity:0;color:var(--fg);
-  font-weight:500;font-size:clamp(48px,10vw,72px);letter-spacing:-0.04em;line-height:1;
+  font-weight:500;font-size:clamp(48px,10vw,88px);letter-spacing:-0.04em;line-height:1;
   font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;font-variation-settings:"wght" 500;
   white-space:nowrap;will-change:transform,opacity}
 </style>
@@ -54,29 +54,32 @@ a{color:inherit;text-decoration:none}
 </main>
 <script>
 /* ===== Scale parameters (identical in SwiftUI / Compose) =====
-   TICKS          24 horizontal marks. Column height min(420px, 56vh), column width 56px.
+   TICKS          24 horizontal marks. Column height min(600px, 62vh), column width 56px.
                   Idle 16×2, neighbor 20×2, active 28×2. Length animates with scaleX
                   (origin left). Value domain 0–100. Top of the column is 100, bottom is 0.
    ACTIVE         activeIndex = round(value / 100 * 23), clamped 0…23. Exactly one tick is amber.
+                  Its drawn length is max(its spring length, the longest other tick), so the
+                  amber mark is never shorter than a grey one, on any frame.
    NEIGHBOR       |Δ|==0 amber #FFB547 + 28px · |Δ|==1 #6B6B6B + 20px · else #2A2A2A + 16px
                   (static targets — no extra falloff spring)
-   READOUT        Inter 500, clamp(48px, 10vw, 72px), tracking −0.04em, tabular nums, body color.
+   READOUT        Inter 500, clamp(48px, 10vw, 88px), tracking −0.04em, tabular nums, body color.
                   Sits 28px to the right of the 56px column. Its Y follows the continuous value
                   (same spring) plus a second channel of that spring onto the active tick,
                   so a resting number sits on the lit mark and a moving number never jumps.
-   SPRING         stiffness 200, damping 24, mass 1 on value and on each tick length.
+   SPRING         Value, and a tick whose target length is shrinking: stiffness 200, damping 24, mass 1.
+                  A tick whose target length is growing: stiffness 320, damping 30, mass 1.
                   Settle within 0.25 so a return to 50 rests on the boundary instead of chattering.
-                  Visual length overshoot stays under 6px (ζ ≈ 0.849).
-   SWIFTUI        .spring(response: 0.36, dampingFraction: 0.78)
-   COMPOSE        spring(dampingRatio = 0.78f, stiffness = 200f)
+   SWIFTUI        value / shrink .spring(response: 0.36, dampingFraction: 0.78)
+                  length grow .spring(response: 0.35, dampingFraction: 0.84)
+   COMPOSE        value / shrink spring(dampingRatio = 0.78f, stiffness = 200f)
+                  length grow spring(dampingRatio = 0.84f, stiffness = 320f)
    CSS FALLBACK   cubic-bezier(0.22, 1, 0.36, 1) 480ms — not used; motion is the rAF spring.
    DESKTOP        Rest at 50. Pointer maps Y to the spring target. Leave springs back to 50.
-   TOUCH          No fine pointer: after the reveal, 1400ms guide 0→100→80,
-                  cubic-bezier(0.65, 0, 0.35, 1), split in two equal halves.
-                  The second leg lands on driftHi. Drift is mid + amp·cos(ωt),
-                  mid 50, amp 30, period 8000ms: at t=0 it sits at 80 with zero
-                  velocity (range 20–80). Touch drives the spring target from Y;
-                  on lift, 300ms smoothstep back into the drift.
+   TOUCH          No fine pointer: after the reveal, 1400ms guide 0→100→20.
+                  First leg 760ms, second 640ms, each cubic-bezier(0.65, 0, 0.35, 1).
+                  Drift is 50 − 30·cos(ωt), period 8000ms, driftT0 = scanT0 + 1400.
+                  At t=0 it sits at 20 with zero velocity and turns upward (range 20–80).
+                  Touch drives the spring target from Y; on lift, 300ms smoothstep back into the drift.
    INTRO          Hidden until the font is ready and the column is measured.
                   Stage opacity 160ms linear. Ticks stagger from the center outward, 40ms apart,
                   scaleX 0.6→1 and opacity, 160ms each. Number fades 120ms linear once tick
@@ -90,11 +93,14 @@ const P = {
   lenIdle: 16, lenNear: 20, lenActive: 28,
   colW: 56, gap: 28,
   k: 200, c: 24, m: 1,
+  kGrow: 320, cGrow: 30,
   swiftResponse: 0.36, swiftDamping: 0.78,
+  swiftResponseGrow: 0.35, swiftDampingGrow: 0.84,
   composeDamping: 0.78, composeStiffness: 200,
+  composeDampingGrow: 0.84, composeStiffnessGrow: 320,
   easeFallbackMs: 480,
   stageFade: 160, stagger: 40, tickIn: 160, numFade: 120, tickFrom: 0.6,
-  scanDur: 1400, driftPeriod: 8000, driftLo: 20, driftHi: 80, resume: 300,
+  scanDur: 1400, scanUp: 760, scanDown: 640, driftPeriod: 8000, driftLo: 20, driftHi: 80, resume: 300,
   settle: 0.25,
   amber: '#FFB547', near: '#6B6B6B', idle: '#2A2A2A'
 };
@@ -134,26 +140,34 @@ function colorTarget(i, active) {
   return d === 0 ? P.amber : d === 1 ? P.near : P.idle;
 }
 /* Semi-implicit Euler, 1/240 s substeps. Mass is 1. */
-function spring(pos, vel, target, dt) {
+function spring(pos, vel, target, dt, k, c) {
   const n = Math.max(1, Math.round(dt * 240)), h = dt / n;
   for (let s = 0; s < n; s++) {
-    vel += (-P.k * (pos - target) - P.c * vel) * h;
+    vel += (-k * (pos - target) - c * vel) * h;
+    pos += vel * h;
+  }
+  if (Math.abs(pos - target) < P.settle && Math.abs(vel) < 40) { pos = target; vel = 0; }
+  return [pos, vel];
+}
+/* Extending a tick uses 320/30. Contracting keeps 200/24. Chosen per substep. */
+function lengthSpring(pos, vel, target, dt) {
+  const n = Math.max(1, Math.round(dt * 240)), h = dt / n;
+  for (let s = 0; s < n; s++) {
+    const grow = target > pos;
+    vel += (-(grow ? P.kGrow : P.k) * (pos - target) - (grow ? P.cGrow : P.c) * vel) * h;
     pos += vel * h;
   }
   if (Math.abs(pos - target) < P.settle && Math.abs(vel) < 40) { pos = target; vel = 0; }
   return [pos, vel];
 }
 function scanValue(elapsed) {
-  const half = P.scanDur / 2;
-  if (elapsed <= half) return P.vmax * easeGuide(elapsed / half);
-  return P.vmax + (P.driftHi - P.vmax) * easeGuide((elapsed - half) / half);
+  if (elapsed <= P.scanUp) return P.vmax * easeGuide(elapsed / P.scanUp);
+  return P.vmax + (P.driftLo - P.vmax) * easeGuide((elapsed - P.scanUp) / P.scanDown);
 }
-/* mid 50, amp 30. cos(ωt) is 1 at t=0, so the handoff sits at driftHi with zero velocity. */
+/* 50 − 30·cos(ωt). At t=0 this is 20 with zero velocity, then it turns upward. */
 function driftValue(now) {
-  const amp = (P.driftHi - P.driftLo) / 2;
-  const mid = (P.driftHi + P.driftLo) / 2;
   const phase = ((now - driftT0) / P.driftPeriod) * Math.PI * 2;
-  return mid + amp * Math.cos(phase);
+  return 50 - 30 * Math.cos(phase);
 }
 function smooth(u) { return u * u * (3 - 2 * u); }
 
@@ -189,7 +203,7 @@ let yOff = 0, yOffV = 0;
 let target = value;
 let mode = fine || reduced ? 'spring' : 'hold';
 let shown = null;
-let colTop = 0, colH = 420;
+let colTop = 0, colH = 600;
 let t0 = 0, scanT0 = 0, driftT0 = 0, blendT0 = 0, blendFrom = P.rest;
 let touching = false, touchId = null;
 let last = 0, started = false;
@@ -206,7 +220,7 @@ seedLengths();
 function measure() {
   const r = ticksEl.getBoundingClientRect();
   colTop = r.top;
-  colH = r.height || Math.min(420, innerHeight * 0.56);
+  colH = r.height || Math.min(600, innerHeight * 0.62);
 }
 function valueFromY(y) {
   if (colH <= 0) return P.rest;
@@ -280,7 +294,7 @@ function frame(now) {
       vvel = 0;
       if (u >= 1) mode = 'drift';
     } else if (mode === 'spring') {
-      [value, vvel] = spring(value, vvel, target, dt);
+      [value, vvel] = spring(value, vvel, target, dt, P.k, P.c);
     }
   } else {
     value = P.rest; vvel = 0; target = P.rest;
@@ -289,16 +303,26 @@ function frame(now) {
   const active = activeIndex(value);
   const offT = alignTarget(value, active);
   if (reduced) { yOff = offT; yOffV = 0; }
-  else if (dt > 0) [yOff, yOffV] = spring(yOff, yOffV, offT, dt);
+  else if (dt > 0) [yOff, yOffV] = spring(yOff, yOffV, offT, dt, P.k, P.c);
+  const grows = new Array(ticks.length);
   for (let i = 0; i < ticks.length; i++) {
     const tk = ticks[i];
     const goal = lenTarget(i, active);
     if (reduced) { tk.len = goal; tk.vel = 0; }
-    else if (dt > 0) [tk.len, tk.vel] = spring(tk.len, tk.vel, goal, dt);
+    else if (dt > 0) [tk.len, tk.vel] = lengthSpring(tk.len, tk.vel, goal, dt);
     const introT = reduced ? 1 : clamp((now - t0 - delays[i]) / P.tickIn, 0, 1);
-    const grow = P.tickFrom + (1 - P.tickFrom) * (reduced ? 1 : easeSoft(introT));
+    grows[i] = P.tickFrom + (1 - P.tickFrom) * (reduced ? 1 : easeSoft(introT));
+  }
+  let maxOther = 0;
+  for (let i = 0; i < ticks.length; i++) {
+    if (i !== active) maxOther = Math.max(maxOther, ticks[i].len * grows[i]);
+  }
+  for (let i = 0; i < ticks.length; i++) {
+    const tk = ticks[i];
+    const introT = reduced ? 1 : clamp((now - t0 - delays[i]) / P.tickIn, 0, 1);
+    const rendered = i === active ? Math.max(tk.len, maxOther) : tk.len * grows[i];
     const center = tickY(i);
-    tk.el.style.transform = `translate3d(0,${(center - 1).toFixed(2)}px,0) scaleX(${(tk.len / P.lenIdle * grow).toFixed(4)})`;
+    tk.el.style.transform = `translate3d(0,${(center - 1).toFixed(2)}px,0) scaleX(${(rendered / P.lenIdle).toFixed(4)})`;
     tk.el.style.opacity = introT.toFixed(3);
     const col = colorTarget(i, active);
     if (tk.col !== col) { tk.col = col; tk.el.style.background = col; }
@@ -334,12 +358,12 @@ function start() {
   last = 0;
   frame(t0);
 }
-document.fonts.load("500 72px 'Inter Var'").then(() => start(), () => start());
+document.fonts.load("500 88px 'Inter Var'").then(() => start(), () => start());
 window.__scale = {
   P,
   activeIndex,
   scanValue,
-  state: () => ({ value, target, mode, shown, active: activeIndex(value), fine, reduced })
+  state: () => ({ value, target, mode, shown, active: activeIndex(value), fine, reduced, t0, scanT0, driftT0 })
 };
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
