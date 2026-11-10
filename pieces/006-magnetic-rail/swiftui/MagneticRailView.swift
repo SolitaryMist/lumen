@@ -1,6 +1,9 @@
 // Magnetic rail — Lumen 006 (SwiftUI, iOS 16+)
 // Bundle Inter Variable (see README). Parameters match the web piece one-to-one.
 import SwiftUI
+#if canImport(GameController)
+import GameController
+#endif
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -20,7 +23,12 @@ import UIKit
    GUIDE  No fine pointer: after entrance, u runs 0→1 over 1400ms, timingCurve(0.45, 0, 0.55, 1).
           u = 0 is the first center, u = 1 the last. Drift is 0.5 + 0.5 cos(ωt), period 8000ms.
           driftT0 = entrance end + 1400, so t = 0 is u = 1 with velocity 0, then it moves left.
-   FINE   Known at launch on macOS, Mac Catalyst, iOS on a Mac, or when a hover pointer is present. Those rest on index 2. A touch-only iPad follows the same guide then drift as iPhone.
+   FINE   macOS, Mac Catalyst, and an iOS app on a Mac rest on index 2.
+          On iPhone and iPad, GCMouse.mice() is the connected-mouse list (iOS 14+).
+          A non-empty list also rests on index 2. An empty list uses the guide, then drift.
+          The first hover over the rail switches into pointer-follow.
+          Connect moves a running guide to the middle rest. Disconnect, once the
+          pointer has left, starts the guide again. Reduce Motion stays static.
           Leaving the rail fades the bar over 200ms and returns scales to 1.
           Entering again fades the bar in over 200ms from the pointer x.
    ENTER  Stage opacity 160ms linear. Items spring 0.88 → magnetic scale, stagger 60ms
@@ -81,24 +89,33 @@ struct Bezier {
 }
 let easeGuide = Bezier(x1: 0.45, y1: 0, x2: 0.55, y2: 1)
 
-func platformFinePointer() -> Bool {
-    #if os(macOS)
-    return true
-    #elseif targetEnvironment(macCatalyst)
+/// Platforms that always have a fine pointer. An iPad is not assumed to have one.
+func platformAlwaysHasPointer() -> Bool {
+    #if os(macOS) || targetEnvironment(macCatalyst)
     return true
     #elseif os(iOS)
     if ProcessInfo.processInfo.isiOSAppOnMac { return true }
-    if #available(iOS 14.0, *) {
-        if UIDevice.current.userInterfaceIdiom == .mac { return true }
-        // pointerLockState is non-nil only when a pointer is currently available
-        return UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .contains { $0.pointerLockState != nil }
-    }
+    if #available(iOS 14.0, *), UIDevice.current.userInterfaceIdiom == .mac { return true }
     return false
     #else
     return false
     #endif
+}
+
+/// Mice currently attached. `GCMouse.mice()` is the connected-device list, not a capability flag.
+/// Availability: iOS 14+, iPadOS 14+, macOS 11+. A trackpad that never appears in this list
+/// is picked up by the first real hover instead.
+func connectedMice() -> Bool {
+    #if canImport(GameController)
+    if #available(iOS 14.0, macOS 11.0, tvOS 14.0, *) {
+        return !GCMouse.mice().isEmpty
+    }
+    #endif
+    return false
+}
+
+func launchFinePointer() -> Bool {
+    platformAlwaysHasPointer() || connectedMice()
 }
 
 func magScale(_ d: Double) -> Double {
@@ -142,8 +159,77 @@ final class RailModel {
     var fine = false
     var t0 = 0.0, guideT0 = 0.0, driftT0 = 0.0, last = 0.0
     var booted = false
+    private var deviceWatch: [NSObjectProtocol] = []
 
-    init() { fine = platformFinePointer() }
+    init() {
+        fine = launchFinePointer()
+        watchPointingDevices()
+    }
+
+    deinit {
+        let center = NotificationCenter.default
+        for token in deviceWatch { center.removeObserver(token) }
+    }
+
+    /// Connect and disconnect use the same clock as TimelineView.
+    func watchPointingDevices() {
+        guard deviceWatch.isEmpty else { return }
+        #if canImport(GameController)
+        guard #available(iOS 14.0, macOS 11.0, tvOS 14.0, *) else { return }
+        let center = NotificationCenter.default
+        let names = [Notification.Name.GCMouseDidConnect, Notification.Name.GCMouseDidDisconnect]
+        for name in names {
+            let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.notePointerDevices(now: Date().timeIntervalSinceReferenceDate)
+            }
+            deviceWatch.append(token)
+        }
+        #endif
+    }
+
+    /// Re-read `GCMouse.mice()` after a connect or disconnect.
+    /// A hover that is already inside keeps pointer-follow until it ends.
+    func notePointerDevices(now: Double) {
+        if reduced || phase == .still { return }
+        if platformAlwaysHasPointer() {
+            fine = true
+            return
+        }
+        if !booted {
+            fine = connectedMice()
+            return
+        }
+        if connectedMice() {
+            fine = true
+            if inside {
+                if phase != .enter {
+                    phase = .follow
+                    magnet = pointerX
+                    magnetV = 0
+                }
+            } else if phase == .guide || phase == .drift || phase == .away {
+                phase = .idle
+                magnet = Double(MR.centers[2])
+                magnetV = 0
+                fading = false
+            }
+        } else if !inside && fine {
+            fine = false
+            if phase != .enter { beginGuide(now: now) }
+        }
+    }
+
+    func beginGuide(now: Double) {
+        phase = .guide
+        guideT0 = now
+        driftT0 = 0
+        magnetV = 0
+        fading = false
+    }
+
+    func holdsPointerWithoutHover() -> Bool {
+        platformAlwaysHasPointer() || connectedMice()
+    }
 
     func boot(now: Double) {
         guard !booted else { return }
@@ -206,14 +292,36 @@ final class RailModel {
     }
 
     func hover(x: Double, inside: Bool, now: Double) {
-        if reduced || !fine { return }
-        self.inside = inside
+        if reduced || phase == .still { return }
         if inside {
+            // Real hover input. This is the trackpad path when `GCMouse.mice()` is empty.
+            let promoted = !fine
+            fine = true
+            self.inside = true
             pointerX = x
+            if phase == .enter { return }
+            if promoted || phase == .guide || phase == .drift {
+                phase = .follow
+                magnet = x
+                magnetV = 0
+                if markOp <= 0 {
+                    barX = x
+                    barV = 0
+                    beginFade(to: 1, now: now)
+                }
+                return
+            }
             engage(now: now, entered: phase == .away)
-        } else if phase == .follow || phase == .snap {
-            beginFade(to: 0, now: now)
-            phase = .away
+        } else {
+            self.inside = false
+            guard phase == .follow || phase == .snap else { return }
+            if holdsPointerWithoutHover() {
+                beginFade(to: 0, now: now)
+                phase = .away
+            } else {
+                fine = false
+                beginGuide(now: now)
+            }
         }
     }
 
@@ -392,12 +500,20 @@ struct MagneticRailView: View {
                 }
             }
             .onAppear {
+                model.watchPointingDevices()
                 model.reduced = reduced
-                model.fine = reduced ? false : platformFinePointer()
+                if reduced {
+                    model.fine = false
+                    if model.booted && model.phase != .still {
+                        model.reset(now: Date().timeIntervalSinceReferenceDate)
+                    }
+                } else {
+                    model.notePointerDevices(now: Date().timeIntervalSinceReferenceDate)
+                }
             }
             .onChange(of: reduced) { value in
                 model.reduced = value
-                model.fine = value ? false : platformFinePointer()
+                model.fine = value ? false : launchFinePointer()
                 model.booted = true
                 model.reset(now: Date().timeIntervalSinceReferenceDate)
             }
