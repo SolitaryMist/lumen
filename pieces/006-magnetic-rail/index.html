@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Magnetic rail — Lumen 006</title>
+<meta property="og:title" content="Magnetic rail — Lumen 006">
+<meta property="og:description" content="Icons scale with proximity. An amber bar rests under the nearest one. Motion study by @aldininin.">
+<meta property="og:image" content="https://lumen-motion.vercel.app/006-magnetic-rail/og.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lumen-motion.vercel.app/006-magnetic-rail/og.png">
+<meta name="description" content="Icons scale with proximity. An amber bar rests under the nearest one. Motion study by @aldininin.">
+<link rel="preload" href="inter-var.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Inter Var";src:url(inter-var.woff2) format("woff2");font-weight:100 900;font-display:block}
+:root{color-scheme:dark;--bg:#0C0C0C;--fg:#F2F2F2;--idle:#6B6B6B;--sub:#8A8A8A;--amber:#FFB547}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;overscroll-behavior:none;
+  font-family:"Inter Var",Inter,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0}
+.links{position:fixed;top:20px;right:24px;z-index:50;display:flex;gap:16px;font-size:12px;line-height:1;font-weight:400}
+.links a{color:var(--idle)}
+.links a:hover,.links a:focus-visible{color:var(--fg)}
+.stage{position:fixed;inset:0;display:grid;place-items:center;visibility:hidden;opacity:0;
+  touch-action:none;user-select:none;-webkit-user-select:none}
+.cluster{display:flex;flex-direction:column;align-items:center}
+.heading{text-align:center}
+.heading h1{font-weight:500;font-size:clamp(28px,8vw,40px);letter-spacing:-0.035em;line-height:1;color:var(--fg);white-space:nowrap}
+.sub{margin-top:8px;font-size:12px;line-height:12px;font-weight:400;color:var(--sub);white-space:nowrap}
+.rail{width:min(560px,88vw);display:flex;justify-content:center;padding:28px 0 18px}
+.row{position:relative;width:328px;height:59px;display:flex;align-items:flex-end;justify-content:space-between}
+.item{width:40px;min-width:0;height:59px;flex:0 0 40px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+.item:focus-visible{outline:1px solid var(--sub);outline-offset:6px}
+.slot{width:40px;height:40px;display:flex;align-items:flex-end;justify-content:center;overflow:visible}
+.slot svg{width:40px;height:40px;display:block;overflow:visible;transform-origin:50% 100%;color:var(--idle)}
+.label{margin-top:8px;height:11px;font-size:11px;line-height:11px;font-weight:400;color:var(--idle);white-space:nowrap}
+.mark{position:absolute;left:0;top:0;height:2px;width:40px;border-radius:1px;background:var(--amber);opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<nav class="links" aria-label="Links">
+  <a href="https://github.com/SolitaryMist/lumen" target="_blank" rel="noopener">GitHub</a>
+  <a href="https://x.com/aldininin" target="_blank" rel="noopener">@aldininin</a>
+</nav>
+<main class="stage" id="stage" aria-label="Magnetic rail. Proximity scale.">
+  <div class="cluster">
+    <header class="heading">
+      <h1>Magnetic rail</h1>
+      <p class="sub">Proximity scale</p>
+    </header>
+    <div class="rail" id="rail">
+      <div class="row" id="row"></div>
+    </div>
+  </div>
+</main>
+<script>
+/* ===== Magnetic rail parameters (identical in SwiftUI / Compose) =====
+   ITEMS          5. Rim, Mesh, Weight, Stack, Scale. Slot 40px, centers 72px apart
+                  (row is 40 + 72×4 = 328). Scale is transform only, origin bottom center,
+                  so the label baseline does not move. align-items: flex-end.
+   SCALE          1 + 0.5 * exp(-d² / (2 σ²)), σ = 56. d is horizontal distance to the
+                  magnet. Peak 1.5 (60px). Nearest item only: lift 4px * hot * (scale-1)/0.5.
+   SPRING         Scale and highlight: stiffness 280, damping 28, mass 0.1.
+                  a = (-k (x - target) - c v) / m. 1/240 s semi-implicit steps.
+                  Slide of the amber bar: stiffness 220, damping 26, mass 1.
+                  Press snaps the magnet to that item's center: stiffness 320, damping 30, mass 1.
+   SWIFTUI        Scale .spring(response: 0.32, dampingFraction: 0.82)
+                  Slide .spring(response: 0.36, dampingFraction: 0.80)
+   COMPOSE        Scale spring(dampingRatio: 0.82, stiffness: 280)
+                  Slide spring(dampingRatio: 0.80, stiffness: 220)
+                  The frame loop is the shared integrator above, not the platform helper.
+   CSS FALLBACK   cubic-bezier(0.22, 1.2, 0.36, 1) — not used; motion is the rAF spring.
+   ENTRANCE       Hidden until the font is ready and the row is measured. Stage opacity
+                  0→1 linear over 160ms. Each item springs 0.88 → its magnetic scale,
+                  stagger 60ms from the left, same 280/28/0.1 spring. Entrance end is
+                  t0 + 760ms (last delay 240ms plus the settle of 0.88 → 1.5). The amber
+                  bar stays at opacity 0 until then, then appears in place.
+   FINE POINTER   Rest the magnet on the middle item (index 2) and wait. No guide.
+                  Leaving the rail fades the bar to 0 in 200ms and returns scales to 1.
+                  Entering again fades the bar in over 200ms from the pointer's x.
+   NO FINE        After entrance, normalized magnet u runs 0→1 over 1400ms,
+                  cubic-bezier(0.45, 0, 0.55, 1). u = 0 is the first center, u = 1 the last.
+                  Drift is u = 0.5 + 0.5 cos(ωt), period 8000ms. driftT0 = entrance end + 1400,
+                  so t = 0 sits at u = 1 with velocity 0 and then moves left.
+   PRESS          Optional, fine pointer only. Magnet springs to that center (320/30). No navigation.
+   REDUCED        Static. Every scale is 1. Bar fixed under the middle item. No entrance, guide, drift, or spring.
+   COLORS         bg #0C0C0C · idle #6B6B6B · nearest #F2F2F2 · secondary #8A8A8A · amber #FFB547
+                  Amber is the 2px bar only, even device-pixel aligned, radius 1px.
+   ICONS          1.5px stroke, no fill, viewBox 40. Circle / 3×3 rings / three bars /
+                  three round rects / five ticks. Same coordinates on all three platforms.
+   LAYOUT         Title 48px above the icon row (8px, 12px subtitle, 28px). Title size
+                  clamp(28px, 8vw, 40px), tracking −0.035em. Rail width min(560px, 88vw).
+   ================================================================= */
+const P = {
+  count: 5, slot: 40, gap: 72, sigma: 56, lift: 4,
+  k: 280, c: 28, m: 0.1,
+  kSlide: 220, cSlide: 26, mSlide: 1,
+  kSnap: 320, cSnap: 30, mSnap: 1,
+  swiftResponse: 0.32, swiftDamping: 0.82,
+  swiftSlideResponse: 0.36, swiftSlideDamping: 0.80,
+  composeDamping: 0.82, composeStiffness: 280,
+  composeSlideDamping: 0.80, composeSlideStiffness: 220,
+  stageFade: 160, stagger: 60, enterFrom: 0.88, entrance: 760,
+  guide: 1400, driftPeriod: 8000, away: 200,
+  labelGap: 8, label: 11, barGap: 12, barH: 2, titleGap: 48,
+  rowW: 328, rowH: 59,
+  easeFallback: [0.22, 1.2, 0.36, 1],
+  easeGuide: [0.45, 0, 0.55, 1],
+  names: ['Rim', 'Mesh', 'Weight', 'Stack', 'Scale'],
+  idle: '#6B6B6B', hot: '#F2F2F2', amber: '#FFB547'
+};
+const CENTERS = Array.from({ length: P.count }, (_, i) => P.slot / 2 + i * P.gap);
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+function bez(x1, y1, x2, y2) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const X = t => ((ax * t + bx) * t + cx) * t;
+  const Y = t => ((ay * t + by) * t + cy) * t;
+  const dX = t => (3 * ax * t + 2 * bx) * t + cx;
+  return x => {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const e = X(t) - x, d = dX(t);
+      if (Math.abs(e) < 1e-6 || Math.abs(d) < 1e-6) break;
+      t -= e / d;
+    }
+    if (t < 0 || t > 1) {
+      let a = 0, b = 1; t = x;
+      for (let i = 0; i < 30; i++) { const v = X(t); if (v < x) a = t; else b = t; t = (a + b) / 2; }
+    }
+    return Y(t);
+  };
+}
+const easeGuide = bez(...P.easeGuide);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const reduceMq = matchMedia('(prefers-reduced-motion: reduce)');
+const fineMq = matchMedia('(hover: hover) and (pointer: fine)');
+let reduced = reduceMq.matches;
+let fine = !reduced && fineMq.matches;
+
+function magScale(d) {
+  return 1 + 0.5 * Math.exp(-(d * d) / (2 * P.sigma * P.sigma));
+}
+function nearestOf(x) {
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < P.count; i++) {
+    const d = Math.abs(x - CENTERS[i]);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+function normU(x) {
+  return (x - CENTERS[0]) / (CENTERS[P.count - 1] - CENTERS[0]);
+}
+function xFromU(u) {
+  return CENTERS[0] + u * (CENTERS[P.count - 1] - CENTERS[0]);
+}
+/* Semi-implicit Euler. Mass is part of the acceleration. */
+function spring(pos, vel, target, dt, k, c, m) {
+  if (!(dt > 0)) return [pos, vel];
+  const n = Math.max(1, Math.round(dt * 240)), h = dt / n;
+  for (let s = 0; s < n; s++) {
+    vel += ((-k * (pos - target) - c * vel) / m) * h;
+    pos += vel * h;
+  }
+  return [pos, vel];
+}
+function driftU(now) {
+  const phase = ((now - driftT0) / P.driftPeriod) * Math.PI * 2;
+  return 0.5 + 0.5 * Math.cos(phase);
+}
+function mix(t) {
+  const u = clamp(t, 0, 1);
+  const c = Math.round(0x6B + (0xF2 - 0x6B) * u);
+  return `rgb(${c},${c},${c})`;
+}
+function snapEven(screenPx) {
+  const dpr = window.devicePixelRatio || 1;
+  return Math.round(screenPx * dpr / 2) * 2 / dpr;
+}
+function trackable(e) {
+  return e.pointerType === 'mouse' || e.pointerType === 'pen';
+}
+
+function add(svg, tag, attrs) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) n.setAttribute(k, String(attrs[k]));
+  svg.appendChild(n);
+}
+function iconNode(kind) {
+  const svg = document.createElementNS(SVGNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 40 40');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.5');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  if (kind === 0) add(svg, 'circle', { cx: 20, cy: 20, r: 8.5 });
+  else if (kind === 1) {
+    for (const y of [12, 20, 28]) for (const x of [12, 20, 28]) add(svg, 'circle', { cx: x, cy: y, r: 2.15 });
+  } else if (kind === 2) {
+    for (const x of [13, 20, 27]) add(svg, 'line', { x1: x, y1: 11, x2: x, y2: 29 });
+  } else if (kind === 3) {
+    for (const y of [9, 17.5, 26]) add(svg, 'rect', { x: 11, y, width: 18, height: 5, rx: 1.2, ry: 1.2 });
+  } else {
+    for (const y of [10, 15, 20, 25, 30]) add(svg, 'line', { x1: 14, y1: y, x2: 26, y2: y });
+  }
+  return svg;
+}
+
+const row = document.getElementById('row');
+const rail = document.getElementById('rail');
+const stage = document.getElementById('stage');
+const items = P.names.map((name, i) => {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'item';
+  btn.dataset.i = String(i);
+  const slot = document.createElement('span');
+  slot.className = 'slot';
+  const svg = iconNode(i);
+  slot.appendChild(svg);
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = name;
+  btn.appendChild(slot);
+  btn.appendChild(label);
+  row.appendChild(btn);
+  return { btn, svg, label };
+});
+const mark = document.createElement('div');
+mark.className = 'mark';
+mark.setAttribute('aria-hidden', 'true');
+row.appendChild(mark);
+
+const scales = new Array(P.count).fill(P.enterFrom);
+const svel = new Array(P.count).fill(0);
+const hot = new Array(P.count).fill(0);
+const hvel = new Array(P.count).fill(0);
+let magnet = CENTERS[2];
+let magnetV = 0;
+let nearest = 2;
+let barX = CENTERS[2];
+let barV = 0;
+let markOp = 0;
+let phase = 'enter';
+let inside = false;
+let pointerX = CENTERS[2];
+let snapTarget = CENTERS[2];
+let snapAnchor = CENTERS[2];
+let fading = false;
+let fadeFrom = 0;
+let fadeTo = 1;
+let fadeT0 = 0;
+let t0 = 0, guideT0 = 0, driftT0 = 0, last = 0, started = false;
+
+function resetMotion(now) {
+  t0 = now;
+  last = 0;
+  guideT0 = 0;
+  driftT0 = 0;
+  fading = false;
+  markOp = 0;
+  magnetV = 0;
+  barV = 0;
+  inside = false;
+  if (reduced) {
+    phase = 'static';
+    fine = false;
+    magnet = CENTERS[2];
+    nearest = 2;
+    barX = CENTERS[2];
+    markOp = 1;
+    for (let i = 0; i < P.count; i++) {
+      scales[i] = 1; svel[i] = 0;
+      hot[i] = i === 2 ? 1 : 0; hvel[i] = 0;
+    }
+    return;
+  }
+  fine = fineMq.matches;
+  phase = 'enter';
+  nearest = fine ? 2 : 0;
+  magnet = CENTERS[nearest];
+  pointerX = magnet;
+  barX = magnet;
+  for (let i = 0; i < P.count; i++) {
+    scales[i] = P.enterFrom; svel[i] = 0;
+    hot[i] = i === nearest ? 1 : 0; hvel[i] = 0;
+  }
+}
+function beginFade(to, now) {
+  fadeFrom = markOp;
+  fadeTo = to;
+  fadeT0 = now;
+  fading = true;
+}
+function localX(clientX) {
+  return clientX - row.getBoundingClientRect().left;
+}
+
+rail.addEventListener('pointerenter', e => {
+  if (!trackable(e) || reduced) return;
+  inside = true;
+  pointerX = localX(e.clientX);
+  engage(performance.now(), true);
+});
+rail.addEventListener('pointermove', e => {
+  if (!trackable(e) || reduced) return;
+  inside = true;
+  pointerX = localX(e.clientX);
+  engage(performance.now(), false);
+});
+rail.addEventListener('pointerleave', () => {
+  if (!fine || reduced) return;
+  inside = false;
+  if (phase !== 'follow' && phase !== 'snap') return;
+  beginFade(0, performance.now());
+  phase = 'away';
+});
+row.addEventListener('pointerdown', e => {
+  const btn = e.target.closest && e.target.closest('.item');
+  if (!btn || !fine || reduced || phase === 'enter' || phase === 'static') return;
+  if (!trackable(e)) return;
+  const i = Number(btn.dataset.i);
+  phase = 'snap';
+  snapTarget = CENTERS[i];
+  snapAnchor = localX(e.clientX);
+  magnetV = 0;
+  e.preventDefault();
+});
+
+function engage(now, entered) {
+  if (phase === 'enter' || phase === 'guide' || phase === 'drift' || phase === 'static') return;
+  if (phase === 'away' || (entered && markOp < 0.999)) {
+    barX = pointerX;
+    barV = 0;
+    beginFade(1, now);
+    phase = 'follow';
+    magnet = pointerX;
+    magnetV = 0;
+    return;
+  }
+  if (phase === 'snap') {
+    if (Math.abs(pointerX - snapAnchor) > 4) phase = 'follow';
+    else return;
+  }
+  phase = 'follow';
+  magnet = pointerX;
+  magnetV = 0;
+}
+
+function paint(now) {
+  const rect = row.getBoundingClientRect();
+  for (let i = 0; i < P.count; i++) {
+    const influence = clamp((scales[i] - 1) / 0.5, 0, 1);
+    const lift = P.lift * clamp(hot[i], 0, 1) * influence;
+    const color = mix(hot[i]);
+    items[i].svg.style.transform = `translate3d(0,${(-lift).toFixed(3)}px,0) scale(${scales[i].toFixed(4)})`;
+    items[i].svg.style.color = color;
+    items[i].label.style.color = color;
+    items[i].label.style.fontVariationSettings = `"wght" ${(400 + 100 * clamp(hot[i], 0, 1)).toFixed(2)}`;
+  }
+  const w = Math.max(2, snapEven(P.slot * scales[nearest]));
+  const leftScreen = snapEven(rect.left + barX - w / 2);
+  const topScreen = snapEven(rect.top + P.rowH + P.barGap);
+  const h = Math.max(2, snapEven(P.barH));
+  mark.style.width = w + 'px';
+  mark.style.height = h + 'px';
+  mark.style.transform = `translate3d(${(leftScreen - rect.left).toFixed(3)}px,${(topScreen - rect.top).toFixed(3)}px,0)`;
+  mark.style.opacity = markOp.toFixed(3);
+  const stageOp = reduced ? 1 : clamp((now - t0) / P.stageFade, 0, 1);
+  stage.style.opacity = stageOp.toFixed(3);
+}
+
+function frame(now) {
+  const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
+  last = now;
+  if (reduced || phase === 'static') {
+    magnet = CENTERS[2];
+    magnetV = 0;
+    nearest = 2;
+    barX = CENTERS[2];
+    barV = 0;
+    markOp = 1;
+    fading = false;
+    for (let i = 0; i < P.count; i++) {
+      scales[i] = 1; svel[i] = 0;
+      hot[i] = i === 2 ? 1 : 0; hvel[i] = 0;
+    }
+    paint(now);
+    if (!document.hidden) requestAnimationFrame(frame);
+    return;
+  }
+
+  const entranceEnd = t0 + P.entrance;
+  if (phase === 'enter' && now >= entranceEnd) {
+    if (fine && inside) {
+      phase = 'follow';
+      magnet = pointerX;
+    } else if (fine) phase = 'idle';
+    else {
+      phase = 'guide';
+      guideT0 = entranceEnd;
+    }
+  }
+  if (phase === 'guide') {
+    const el = now - guideT0;
+    if (el >= P.guide) {
+      driftT0 = guideT0 + P.guide;
+      phase = 'drift';
+    } else magnet = xFromU(easeGuide(clamp(el / P.guide, 0, 1)));
+  }
+  if (phase === 'drift') magnet = xFromU(driftU(now));
+  else if (phase === 'snap') {
+    [magnet, magnetV] = spring(magnet, magnetV, snapTarget, dt, P.kSnap, P.cSnap, P.mSnap);
+  } else if (phase === 'idle') {
+    magnet = CENTERS[2];
+    magnetV = 0;
+  } else if (phase === 'follow') {
+    magnet = pointerX;
+    magnetV = 0;
+  }
+
+  if (phase !== 'away') nearest = nearestOf(magnet);
+  for (let i = 0; i < P.count; i++) {
+    const delay = t0 + i * P.stagger;
+    const goal = phase === 'away' ? 1 : magScale(magnet - CENTERS[i]);
+    const hgoal = phase === 'away' ? 0 : (i === nearest ? 1 : 0);
+    if (now < delay) {
+      scales[i] = P.enterFrom;
+      svel[i] = 0;
+    } else {
+      const step = Math.min(dt, (now - delay) / 1000);
+      [scales[i], svel[i]] = spring(scales[i], svel[i], goal, step, P.k, P.c, P.m);
+      [hot[i], hvel[i]] = spring(hot[i], hvel[i], hgoal, step, P.k, P.c, P.m);
+    }
+  }
+  if (phase !== 'away') {
+    [barX, barV] = spring(barX, barV, CENTERS[nearest], dt, P.kSlide, P.cSlide, P.mSlide);
+  }
+  if (now < entranceEnd) markOp = 0;
+  else if (fading) {
+    const u = clamp((now - fadeT0) / P.away, 0, 1);
+    markOp = fadeFrom + (fadeTo - fadeFrom) * u;
+    if (u >= 1) { fading = false; markOp = fadeTo; }
+  } else if (phase === 'away') markOp = 0;
+  else markOp = 1;
+
+  paint(now);
+  if (!document.hidden) requestAnimationFrame(frame);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && started) { last = 0; requestAnimationFrame(frame); }
+});
+reduceMq.addEventListener('change', () => {
+  reduced = reduceMq.matches;
+  if (!started) return;
+  resetMotion(performance.now());
+  stage.style.visibility = 'visible';
+  paint(t0);
+  last = 0;
+  requestAnimationFrame(frame);
+});
+
+function start() {
+  if (started) return;
+  started = true;
+  resetMotion(performance.now());
+  paint(t0);
+  stage.style.visibility = 'visible';
+  last = 0;
+  requestAnimationFrame(frame);
+}
+document.fonts.load("500 40px 'Inter Var'").then(() => start(), () => start());
+window.__rail = {
+  P,
+  CENTERS,
+  magScale,
+  nearestOf,
+  normU,
+  xFromU,
+  driftU,
+  easeGuide,
+  state: () => ({
+    phase, magnet, magnetV, nearest, barX, barV, markOp, fine, reduced,
+    scales: scales.slice(), hot: hot.slice(),
+    u: normU(magnet), t0, guideT0, driftT0, inside, started
+  })
+};
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
