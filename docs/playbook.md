@@ -23,3 +23,13 @@ Shared rules for every piece. Add a rule whenever the same issue shows up twice.
 
 ## Recording
 - Vertical recordings scroll at about 6s to reveal the cards; keep each one at most 10s.
+
+## Framework delivery
+Every piece ships five code surfaces in the gallery: Web, SwiftUI, Compose, React, and Vue. The first three stay. React and Vue are added beside them.
+
+- React and Vue files are real components of that framework, with the same motion numbers as the web piece.
+- They honor `prefers-reduced-motion`.
+- `requestAnimationFrame` loops and input listeners are removed when the component unmounts.
+- The code area keeps the same height when the tab changes, so the page does not jump.
+- At 390px the tab row scrolls sideways so every tab can be reached.
+- Long lines scroll sideways inside the code area.
