@@ -8,7 +8,7 @@ Drop `MagneticRailView.swift` into an iOS 16+ SwiftUI target and bundle **Inter 
 - The bar is 2pt tall, amber `#FFB547` only, width equal to the nearest item's current visual width, radius 1pt.
 - Icons are stroked paths at 1.5pt: a circle, a 3×3 set of rings, three vertical bars, three rounded rectangles, five short ticks. No fill.
 - No fine pointer: after the 760ms entrance, a 1400ms guide runs normalized x from 0 to 1 with `timingCurve(0.45, 0, 0.55, 1)`. Drift is `0.5 + 0.5·cos(ωt)` over 8000ms, starting when the guide ends, so it sits at the right end with zero velocity and then moves left.
-- macOS, Mac Catalyst, and iPad are detected at launch and rest on the middle item. Leaving the rail fades the bar over 200ms and returns every scale to 1. Entering again fades the bar in over 200ms from the pointer position.
+- macOS, Mac Catalyst, iOS running on a Mac, and a device that currently has a hover pointer are detected at launch and rest on the middle item. A touch-only iPad uses the same 1400ms guide and 8000ms drift as iPhone. Leaving the rail fades the bar over 200ms and returns every scale to 1. Entering again fades the bar in over 200ms from the pointer position.
 - Entrance: stage opacity 160ms linear, items spring from 0.88 with a 60ms stagger. The bar stays hidden until 760ms. Reduce Motion holds every scale at 1 with the bar under the middle item and skips the entrance, guide, and drift.
 - Title is `clamp(28, 8% of width, 40)` with tracking −0.035em, 48pt above the icon row. Rail width is `min(560, 88% of width)`.
 - Parameters match the web piece (block at the top of the file). Not compiled here.

@@ -20,7 +20,7 @@ import UIKit
    GUIDE  No fine pointer: after entrance, u runs 0→1 over 1400ms, timingCurve(0.45, 0, 0.55, 1).
           u = 0 is the first center, u = 1 the last. Drift is 0.5 + 0.5 cos(ωt), period 8000ms.
           driftT0 = entrance end + 1400, so t = 0 is u = 1 with velocity 0, then it moves left.
-   FINE   Known at launch on macOS, Mac Catalyst, and iPad. Those rest on index 2.
+   FINE   Known at launch on macOS, Mac Catalyst, iOS on a Mac, or when a hover pointer is present. Those rest on index 2. A touch-only iPad follows the same guide then drift as iPhone.
           Leaving the rail fades the bar over 200ms and returns scales to 1.
           Entering again fades the bar in over 200ms from the pointer x.
    ENTER  Stage opacity 160ms linear. Items spring 0.88 → magnetic scale, stagger 60ms
@@ -82,11 +82,20 @@ struct Bezier {
 let easeGuide = Bezier(x1: 0.45, y1: 0, x2: 0.55, y2: 1)
 
 func platformFinePointer() -> Bool {
-    #if os(macOS) || targetEnvironment(macCatalyst)
+    #if os(macOS)
+    return true
+    #elseif targetEnvironment(macCatalyst)
     return true
     #elseif os(iOS)
-    if UIDevice.current.userInterfaceIdiom == .pad { return true }
-    return ProcessInfo.processInfo.isiOSAppOnMac
+    if ProcessInfo.processInfo.isiOSAppOnMac { return true }
+    if #available(iOS 14.0, *) {
+        if UIDevice.current.userInterfaceIdiom == .mac { return true }
+        // pointerLockState is non-nil only when a pointer is currently available
+        return UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .contains { $0.pointerLockState != nil }
+    }
+    return false
     #else
     return false
     #endif
