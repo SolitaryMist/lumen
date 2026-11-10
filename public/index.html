@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Lumen — One interaction a day.</title>
-<meta name="description" content="Lumen — one interaction a day. Motion studies in Web, SwiftUI and Compose by @aldininin.">
+<title>Lumen — Small interactions, finely tuned.</title>
+<meta name="description" content="Lumen — small interactions, finely tuned. Motion studies in Web, React, Vue, SwiftUI and Compose by @aldininin.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
@@ -164,7 +164,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
 <div class="glow" aria-hidden="true"></div>
 <section class="hero">
   <h1 class="word" id="word"><span class="hero-base">Lumen</span><span class="hero-lit" aria-hidden="true">Lumen</span></h1>
-  <p class="sub">One interaction a day.</p>
+  <p class="sub">Small interactions, finely tuned.</p>
   <p class="issue mono" id="issue">No. 000 · Index</p>
 </section>
 <main><div class="grid" id="grid"></div></main>
@@ -210,7 +210,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
   function render(items) {
     const list = items.length ? items : [
       { no:'001', title:'Coming soon', ph:'orbit' }, { no:'002', title:'Coming soon', ph:'bars' }, { no:'003', title:'Coming soon', ph:'blob' }];
-    if (items.length) document.getElementById('issue').textContent = `No. ${items[0].no}${items[0].date ? ' · ' + fmt(items[0].date) : ''}`;
+    if (items.length) document.getElementById('issue').textContent = `No. ${items[0].no}`;
     grid.innerHTML = '';
     list.forEach((p, i) => {
       const a = document.createElement(p.slug ? 'a' : 'div');
@@ -220,7 +220,7 @@ footer a{transition:color 300ms var(--ease)} footer a:hover{color:var(--fg)}
       const ph = kind === 'blob' ? '<span></span>' : Array.from({length:n},(_,k)=>`<i style="--i:${k}"></i>`).join('');
       // real pieces: lazy iframe of the piece itself as the looping preview
       const pv = p.slug ? `<iframe src="/${p.slug}/" loading="lazy" tabindex="-1" title=""></iframe>` : `<div class="ph ph-${kind}">${ph}</div>`;
-      a.innerHTML = `<div class="pv">${pv}</div><div class="meta"><span class="mono no">No. ${p.no}${p.date ? ' · ' + fmt(p.date) : ''}</span><h3></h3><span class="mono">${TAGS}</span></div>`;
+      a.innerHTML = `<div class="pv">${pv}</div><div class="meta"><span class="mono no">No. ${p.no}</span><h3></h3><span class="mono">${TAGS}</span></div>`;
       a.querySelector('h3').textContent = p.title;
       grid.appendChild(a);
     });
