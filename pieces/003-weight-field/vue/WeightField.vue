@@ -15,10 +15,38 @@ onMounted(() => {
   const onReduce = () => { reduced = reducedMq.matches; };
   reducedMq.addEventListener('change', onReduce);
   const measure = () => {
-    const width = el.getBoundingClientRect().width || 640;
-    for (const l of L) { probe.textContent = l.ch; probe.style.fontVariationSettings = "'wght' 900"; l.w900 = Math.max(24, probe.getBoundingClientRect().width * (width * 0.12) / 100); probe.style.fontVariationSettings = "'wght' 200"; l.w200 = Math.max(16, probe.getBoundingClientRect().width * (width * 0.1) / 100); }
-    let x = 40; L.forEach((l) => { l.cx = x + l.w900 / 2; x += l.w900 * 0.9; });
-    wordLeft = L[0].cx; wordRight = L[L.length-1].cx; R = L.reduce((a,l)=>a+l.w900,0)/L.length*1.6; barY = el.getBoundingClientRect().height * 0.62;
+    const box = el.getBoundingClientRect();
+    const width = box.width || 640;
+    probe.style.fontSize = '100px';
+    probe.style.fontFamily = getComputedStyle(letters[0]).fontFamily;
+    for (const l of L) {
+      probe.textContent = l.ch;
+      probe.style.fontVariationSettings = "'wght' 900, 'opsz' 32";
+      l.w900u = (probe.getBoundingClientRect().width || 60) / 100;
+      probe.style.fontVariationSettings = "'wght' 200, 'opsz' 32";
+      l.w200u = (probe.getBoundingClientRect().width || 40) / 100;
+    }
+    const track = -0.035;
+    const sumU = L.reduce((a, l) => a + l.w900u, 0) + track * (L.length - 1);
+    const frac = width <= 760 ? 0.86 : 0.72;
+    const fontSize = frac * width / Math.max(0.1, sumU);
+    el.querySelector('[data-word]').style.fontSize = fontSize + 'px';
+    let x = (width - sumU * fontSize) / 2;
+    L.forEach((l, i) => {
+      l.w900 = l.w900u * fontSize;
+      l.w200 = l.w200u * fontSize;
+      const cell = l.node.parentElement;
+      cell.style.width = l.w900 + 'px';
+      cell.style.marginLeft = i ? (track * fontSize) + 'px' : '0';
+      l.cx = x + l.w900 / 2;
+      x += l.w900 + track * fontSize;
+    });
+    wordLeft = L[0].cx;
+    wordRight = L[L.length - 1].cx;
+    R = L.reduce((a, l) => a + l.w900, 0) / L.length * 1.6;
+    barY = box.height / 2 + fontSize * 0.44;
+    el.dataset.w900 = L.map((l) => l.w900.toFixed(2)).join(',');
+    el.dataset.w200 = L.map((l) => l.w200.toFixed(2)).join(',');
   };
   const tourX = (now) => {
     const t = now - tour.t0;
@@ -55,7 +83,8 @@ onMounted(() => {
       l.node.style.fontVariationSettings = `'wght' ${l.w.toFixed(1)}`;
       if (l.w > heavy.w) heavy = l;
     });
-    const tw = Math.max(8, 0.3 * (heavy.w900 || 20)), tx = heavy.cx - tw/2;
+    const curW = heavy.w200 + (heavy.w900 - heavy.w200) * ((heavy.w - 200) / (900 - 200));
+    const tw = 0.3 * Math.max(heavy.w200 || 8, curW || 8), tx = heavy.cx - tw / 2;
     if (!barInit) { barX = tx; barW = tw; barInit = true; }
     if (!reduced) { const n=4,h=dt/n; for (let s=0;s<n;s++){ barV += ((-170*(barX-tx)-22*barV))*h; barX += barV*h; barWV += ((-170*(barW-tw)-22*barWV))*h; barW += barWV*h; } }
     else { barX = tx; barW = tw; }
@@ -71,10 +100,10 @@ onUnmounted(() => stop());
 </script>
 <template>
   <div ref="root" data-fw="weight" style="position:relative;height:100%;min-height:280px;background:#0E0E10;color:#E8E6E1;overflow:hidden">
-    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;font-size:72px;letter-spacing:-0.035em">
-      <span v-for="ch in WORD" :key="ch" :data-ch="ch" style="opacity:0">{{ ch }}</span>
+    <div data-word style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;line-height:0.9;letter-spacing:-0.035em;font-family:Inter,ui-sans-serif,system-ui,sans-serif">
+      <div v-for="ch in WORD" :key="ch" data-cell style="display:flex;justify-content:center"><span :data-ch="ch" style="opacity:0">{{ ch }}</span></div>
     </div>
     <i data-bar="1" style="position:absolute;left:0;top:0;height:2px;background:#F2A65A;opacity:0" />
-    <span data-probe="1" aria-hidden="true" style="position:absolute;visibility:hidden;font-size:100px" />
+    <span data-probe="1" aria-hidden="true" style="position:absolute;visibility:hidden;font-size:100px;white-space:pre;font-family:Inter,ui-sans-serif,system-ui,sans-serif" />
   </div>
 </template>

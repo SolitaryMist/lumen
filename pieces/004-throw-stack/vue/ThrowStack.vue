@@ -12,6 +12,18 @@ const root = ref(null);
 let stop = () => {};
 const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
 const spring = (pos, vel, target, k, c, dt) => { vel += (-k*(pos-target) - c*vel)*dt; pos += vel*dt; return [pos, vel]; };
+function eHint(x) {
+  const x1 = 0.65, y1 = 0, x2 = 0.35, y2 = 1;
+  if (x <= 0) return 0; if (x >= 1) return 1;
+  let t = x;
+  for (let i = 0; i < 8; i++) {
+    const cx = 3*x1*t*(1-t)**2 + 3*x2*t*t*(1-t) + t**3 - x;
+    const dx = 3*x1*(1-t)**2 + 6*(x2-x1)*t*(1-t) + 3*(1-x2)*t*t;
+    if (Math.abs(dx) < 1e-6) break;
+    t = Math.min(1, Math.max(0, t - cx / dx));
+  }
+  return 3*y1*t*(1-t)**2 + 3*y2*t*t*(1-t) + t**3;
+}
 onMounted(() => {
   const el = root.value, nodes = [...el.querySelectorAll('article')];
   const reducedMq = matchMedia('(prefers-reduced-motion: reduce)');
@@ -21,6 +33,9 @@ onMounted(() => {
   reducedMq.addEventListener('change', onReduce);
   const cards = nodes.map((node, i) => ({ i, el: node, shade: node.querySelector('[data-shade]'), content: node.querySelector('[data-body]'), tick: node.querySelector('[data-tick]'), depth: i, dv: 0, dTarget: i, x: 0, vx: 0, y: 0, vy: 0, mode: 'rest', tx: 0, tvx: 0, ty: 0, tvy: 0, ttx: 0, tty: 0, introT0: performance.now() + (4-i)*70, tickT0: i===0 ? -1e9 : 0 }));
   let order = cards.map((c) => c.i), drag = null, raf = 0, last = 0, alive = true;
+  let touched = false, hint = null, hintsDone = 0;
+  const now0 = performance.now();
+  let nextHint = now0 + 4 * 70 + 700 + 2500;
   const rotOf = (x) => clamp(x*0.06, -14, 14);
   const fling = (c, dir) => {
     const w = el.getBoundingClientRect().width || 320;
@@ -28,7 +43,11 @@ onMounted(() => {
     order.push(order.shift()); cards[order[0]].tickT0 = performance.now();
     order.forEach((ci, d) => { cards[ci].dTarget = d; });
   };
-  const down = (e) => { const top = cards[order[0]]; if (e.target.closest('article') !== top.el || top.mode==='fling') return; drag = { id: e.pointerId, c: top, sx: e.clientX, sy: e.clientY, x0: top.x, y0: top.y }; top.mode = 'drag'; };
+  const down = (e) => {
+    touched = true; nextHint = Infinity;
+    if (hint) { cards[order[0]].mode = 'spring'; cards[order[0]].vx = 0; hint = null; }
+    const top = cards[order[0]]; if (e.target.closest('article') !== top.el || top.mode==='fling') return; drag = { id: e.pointerId, c: top, sx: e.clientX, sy: e.clientY, x0: top.x, y0: top.y }; top.mode = 'drag';
+  };
   const move = (e) => {
     if (drag && e.pointerId === drag.id) { drag.c.x = drag.x0 + (e.clientX-drag.sx); drag.c.y = (drag.y0 + (e.clientY-drag.sy))*0.6; return; }
     if (canHover && !reduced && e.pointerType === 'mouse') {
@@ -47,6 +66,10 @@ onMounted(() => {
     if (!alive) return;
     const dt = last ? Math.min(0.05,(now-last)/1000) : 0; last = now;
     el.dataset.frames = String((Number(el.dataset.frames)||0)+1);
+    const topCard = cards[order[0]];
+    if (!reduced && !canHover && !touched && hintsDone < 2 && now >= nextHint && !hint && topCard.mode === 'rest') {
+      hint = { t0: now }; topCard.mode = 'hint';
+    }
     const steps = Math.max(1, Math.round(dt*240)), h = dt/steps;
     for (const c of cards) {
       const ti = clamp((now-c.introT0)/700, 0, 1);
@@ -58,6 +81,11 @@ onMounted(() => {
       } else if (c.mode === 'spring' && !reduced) {
         for (let s=0;s<steps;s++) { [c.x,c.vx] = spring(c.x,c.vx,0,380,30,h); [c.y,c.vy] = spring(c.y,c.vy,0,380,30,h); }
         if (Math.abs(c.x)<0.4 && Math.abs(c.y)<0.4) { c.mode='rest'; c.x=c.y=0; }
+      } else if (c.mode === 'hint' && hint) {
+        const u = clamp((now - hint.t0) / 900, 0, 1);
+        c.x = -28 * (u < 0.5 ? eHint(u * 2) : 1 - eHint(Math.max(0, u * 2 - 1)));
+        if (u >= 1) { c.x = 0; c.mode = 'rest'; hint = null; hintsDone++; nextHint = hintsDone < 2 ? now + 4000 : Infinity; }
+        for (let s=0;s<steps;s++) [c.depth, c.dv] = spring(c.depth, c.dv||0, c.dTarget, 260, 26, h);
       } else if (c.mode !== 'drag' && c.mode !== 'fling') {
         for (let s=0;s<steps;s++) [c.depth, c.dv] = spring(c.depth, c.dv||0, c.dTarget, 260, 26, h);
       }
@@ -70,6 +98,9 @@ onMounted(() => {
       c.shade.style.opacity = (clamp(d,0,4)*0.06).toFixed(3);
       c.tick.style.opacity = c === cards[order[0]] && c.mode!=='fling' ? '1' : '0';
     }
+    el.dataset.mode = cards[order[0]].mode;
+    el.dataset.x = cards[order[0]].x.toFixed(2);
+    el.dataset.hints = String(hintsDone);
     raf = requestAnimationFrame(frame);
   };
   raf = requestAnimationFrame(frame);

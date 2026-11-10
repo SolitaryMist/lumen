@@ -4,8 +4,22 @@ import { onMounted, onUnmounted, ref } from 'vue';
 const uid = `rim-${Math.random().toString(36).slice(2, 10)}`;
 const card = ref(null), svg = ref(null), glow = ref(null), fadeA = ref(null), fadeB = ref(null), core = ref(null);
 let stop = () => {};
-const easeOut = (t) => 1 - (1 - Math.min(1, Math.max(0, t))) ** 3;
-const easeSoft = (t) => t < 0.5 ? 2*t*t : 1 - ((-2*t+2)**2)/2;
+function bez(x1, y1, x2, y2) {
+  const A = (a, b) => 1 - 3 * b + 3 * a, B = (a, b) => 3 * b - 6 * a, C = (a) => 3 * a;
+  const calc = (t, a1, a2) => ((A(a1, a2) * t + B(a1, a2)) * t + C(a1)) * t;
+  const slope = (t, a1, a2) => 3 * A(a1, a2) * t * t + 2 * B(a1, a2) * t + C(a1);
+  return (x) => {
+    if (x <= 0) return 0; if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const s = slope(t, x1, x2); if (Math.abs(s) < 1e-6) break;
+      t -= (calc(t, x1, x2) - x) / s;
+    }
+    return calc(Math.min(1, Math.max(0, t)), y1, y2);
+  };
+}
+const easeOut = bez(0.16, 1, 0.3, 1);
+const easeSoft = bez(0.65, 0, 0.35, 1);
 function pathOf(w, h) {
   const inset = 0.75, r = 20, x = inset, y = inset, ww = w - inset*2, hh = h - inset*2;
   const rr = Math.max(0, Math.min(r - inset, ww/2, hh/2)), mid = x + ww/2;
@@ -17,6 +31,8 @@ onMounted(() => {
   const reducedMq = matchMedia('(prefers-reduced-motion: reduce)');
   let reduced = reducedMq.matches, perimeter = 1, samples = [], progress = 0, seg = 0.12, peak = 0.95;
   let mode = reduced ? 'static' : 'intro', springOn = false, sp = 0, sv = 0, starget = 0, pointerIn = false;
+  let animActive = false, animFrom = 0, animTo = 0, animT0 = 0, animDur = 420;
+  let useTourBase = false, tourBase = 0;
   let tourEpoch = performance.now(), introDone = false, raf = 0, last = performance.now(), alive = true;
   const onReduce = () => { reduced = reducedMq.matches; };
   reducedMq.addEventListener('change', onReduce);
@@ -33,12 +49,30 @@ onMounted(() => {
     node.style.strokeDasharray = `${L} ${Math.max(0, perimeter-L)}`;
     node.style.strokeDashoffset = String(-start); node.style.opacity = String(op); node.style.stroke = '#FFB547';
   };
+  const tourNow = (now) => {
+    if (useTourBase) return (tourBase + ((now - tourEpoch) / 8000) % 1) % 1;
+    if (!introDone) return easeSoft(Math.min(1, Math.max(0, (now - tourEpoch) / 4000))) * 0.5;
+    return (0.5 + ((now - tourEpoch) / 8000) % 1) % 1;
+  };
   const move = (e) => {
     if (reduced || (e.pointerType && e.pointerType !== 'mouse')) return;
     const r = el.getBoundingClientRect();
-    const inside = e.clientX >= r.left-48 && e.clientX <= r.right+48 && e.clientY >= r.top-48 && e.clientY <= r.bottom+48;
-    if (inside) { if (mode !== 'magnet') { mode = 'magnet'; springOn = true; sp = progress; sv = 0; } starget = sp + shortest(sp, nearest(e.clientX-r.left, e.clientY-r.top)); pointerIn = true; }
-    else if (pointerIn) { pointerIn = false; mode = 'tour'; springOn = false; tourEpoch = performance.now(); }
+    const inside = e.clientX >= r.left - 48 && e.clientX <= r.right + 48 && e.clientY >= r.top - 48 && e.clientY <= r.bottom + 48;
+    if (inside) {
+      if (mode !== 'magnet') { mode = 'magnet'; springOn = true; animActive = false; sp = progress; sv = 0; }
+      starget = sp + shortest(sp, nearest(e.clientX - r.left, e.clientY - r.top));
+      pointerIn = true;
+    } else if (pointerIn && mode === 'magnet') {
+      pointerIn = false;
+      mode = 'back';
+      springOn = false;
+      const target = tourNow(performance.now());
+      animFrom = progress;
+      animTo = progress + shortest(progress, target);
+      animT0 = performance.now();
+      animDur = 420;
+      animActive = true;
+    }
   };
   const down = () => { if (!reduced) { seg = 0.28; peak = 1; el.style.transform = 'translateY(-4px)'; } };
   const up = () => { seg = 0.12; peak = 0.95; el.style.transform = 'translateY(0px)'; };
@@ -49,10 +83,21 @@ onMounted(() => {
     if (!alive) return;
     const dt = Math.min(0.032, (now-last)/1000); last = now;
     el.dataset.frames = String((Number(el.dataset.frames)||0)+1);
+    el.dataset.mode = mode;
     if (reduced) progress = 0;
     else if (mode === 'magnet' && springOn) { const a = (180*(starget-sp) - 22*sv)/1; sv += a*dt; sp += sv*dt; progress = ((sp%1)+1)%1; }
+    else if (animActive) {
+      const k = Math.min(1, (now - animT0) / animDur);
+      const raw = animFrom + (animTo - animFrom) * easeOut(k);
+      progress = ((raw % 1) + 1) % 1;
+      if (k >= 1) {
+        animActive = false;
+        if (mode === 'back') { mode = 'tour'; tourEpoch = now; tourBase = progress; useTourBase = true; }
+      }
+    } else if (useTourBase) progress = (tourBase + ((now - tourEpoch) / 8000) % 1) % 1;
     else if (!introDone) { const t = Math.min(1, (now-tourEpoch)/4000); progress = easeSoft(t)*0.5; if (t>=1) { introDone = true; tourEpoch = now; mode = 'tour'; } }
     else progress = (0.5 + ((now-tourEpoch)/8000)%1)%1;
+    el.dataset.progress = progress.toFixed(4);
     const len = Math.max(1, seg*perimeter);
     dash(glow.value, progress, Math.min(perimeter*0.22, len*1.6), 0.22);
     dash(fadeA.value, progress, len*1.55, peak*0.22);
