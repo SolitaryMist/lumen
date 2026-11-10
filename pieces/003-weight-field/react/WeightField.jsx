@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
 
-/* Mount: React 18, default export. Render <WeightField /> in a tall box.
-   Load a variable font if you want the weight axis to draw. Each copy measures its own letters.
+/* Mount: React 18, default export. Render <WeightField /> in a box.
+   Register this piece's inter-var.woff2 on the page:
+   @font-face { font-family: "Inter Var"; src: url(inter-var.woff2) format("woff2"); font-weight: 100 900; font-display: block; }
+   The 200 and 900 width probes run after document.fonts.ready.
+   Word size is 0.86 of the box width at 760px and under, and 0.72 above that.
    Springs 170/22/mass 1, sweep 1400ms, ping 7000ms, amber bar #F2A65A. */
 
 const P = {
@@ -37,13 +40,17 @@ export default function WeightField() {
     let reduced = reducedMq.matches;
     const onReduce = () => { reduced = reducedMq.matches; };
     reducedMq.addEventListener('change', onReduce);
-    let fontSize = 80, R = 80, wordLeft = 0, wordRight = 0, barY = 0;
+    let fontSize = 80, R = 80, wordLeft = 0, wordRight = 0, barY = 0, armed = false;
     let px = null, mode = 'idle', leaveT0 = 0, t0 = performance.now(), lastRelease = 0, dragging = false, tour = null;
     let barX = 0, barV = 0, barW = 2, barWV = 0, barOp = 0, barOpFrom = 0, barOpTo = 0, barOpT0 = 0, barInit = false;
     let raf = 0, last = 0, alive = true;
     function measure() {
+      if (!armed) return;
       const box = el.getBoundingClientRect();
       const width = box.width || 640;
+      const word = el.querySelector('[data-word]');
+      probe.style.fontSize = '100px';
+      probe.style.fontFamily = getComputedStyle(word).fontFamily;
       for (const l of L) {
         probe.textContent = l.ch;
         probe.style.fontVariationSettings = "'wght' 900, 'opsz' 32";
@@ -54,6 +61,7 @@ export default function WeightField() {
       const sumU = L.reduce((a, l) => a + l.w900u, 0) + P.tracking * (L.length - 1);
       const frac = width <= 760 ? P.widthMobile : P.widthDesktop;
       fontSize = frac * width / Math.max(0.1, sumU);
+      word.style.fontSize = fontSize + 'px';
       let x = (width - sumU * fontSize) / 2;
       L.forEach((l, i) => {
         l.w900 = l.w900u * fontSize; l.w200 = l.w200u * fontSize;
@@ -64,6 +72,9 @@ export default function WeightField() {
       wordLeft = L[0].cx; wordRight = L[L.length - 1].cx;
       R = L.reduce((a, l) => a + l.w900, 0) / L.length * P.rFactor;
       barY = box.height / 2 + fontSize * 0.44;
+      el.dataset.w900 = L.map((l) => l.w900.toFixed(2)).join(',');
+      el.dataset.w200 = L.map((l) => l.w200.toFixed(2)).join(',');
+      el.dataset.size = fontSize.toFixed(2);
     }
     const setBarOp = (to, now) => { if (barOpTo === to) return; barOpFrom = barOp; barOpTo = to; barOpT0 = now; };
     const ping = (ph) => { const mid = (wordLeft + wordRight) / 2, half = (wordRight - wordLeft) / 2; return mid + half * Math.cos(ph); };
@@ -89,7 +100,15 @@ export default function WeightField() {
     el.addEventListener('pointerup', release);
     el.addEventListener('pointercancel', release);
     el.addEventListener('pointerleave', leave);
-    const ro = new ResizeObserver(measure); ro.observe(el); measure();
+    const ro = new ResizeObserver(measure); ro.observe(el);
+    const begin = () => {
+      if (!alive || armed) return;
+      armed = true;
+      t0 = performance.now();
+      measure();
+      raf = requestAnimationFrame(frame);
+    };
+    document.fonts.load("100px 'Inter Var'").then(() => document.fonts.ready).then(begin, begin);
     const frame = (now) => {
       if (!alive) return;
       const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
@@ -149,7 +168,6 @@ export default function WeightField() {
       if (noHover && !reduced && mode === 'idle' && introDone) { tour = { kind: 'sweep', t0: now }; mode = 'tour'; setBarOp(1, now); }
       raf = requestAnimationFrame(frame);
     };
-    raf = requestAnimationFrame(frame);
     return () => {
       alive = false; cancelAnimationFrame(raf); ro.disconnect();
       el.removeEventListener('pointermove', move);
@@ -162,13 +180,13 @@ export default function WeightField() {
   }, []);
   return (
     <div ref={root} data-fw="weight" style={{ position: 'relative', height: '100%', minHeight: 280, background: '#0E0E10', color: '#E8E6E1', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'flex', lineHeight: 0.9, fontSize: 80 }}>
+      <div data-word style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'flex', lineHeight: 0.9, fontSize: 80, fontFamily: '"Inter Var", Inter, ui-sans-serif, system-ui, sans-serif' }}>
         {P.word.split('').map((ch) => (
           <div key={ch} style={{ display: 'flex', justifyContent: 'center' }}><span data-ch={ch} style={{ opacity: 0 }}>{ch}</span></div>
         ))}
       </div>
       <i data-bar="1" style={{ position: 'absolute', left: 0, top: 0, height: 2, background: '#F2A65A', opacity: 0 }} />
-      <span data-probe="1" aria-hidden="true" style={{ position: 'absolute', visibility: 'hidden', fontSize: 100, whiteSpace: 'pre' }} />
+      <span data-probe="1" aria-hidden="true" style={{ position: 'absolute', visibility: 'hidden', fontSize: 100, whiteSpace: 'pre', fontFamily: '"Inter Var", Inter, ui-sans-serif, system-ui, sans-serif' }} />
     </div>
   );
 }

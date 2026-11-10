@@ -1,6 +1,11 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue';
-/* Mount: Vue 3. <WeightField />. Springs 170/22/mass 1, sweep 1400ms, ping 7000ms, bar #F2A65A. */
+/* Mount: Vue 3. <WeightField /> in a box.
+   Register this piece's inter-var.woff2 on the page:
+   @font-face { font-family: "Inter Var"; src: url(inter-var.woff2) format("woff2"); font-weight: 100 900; font-display: block; }
+   The 200 and 900 width probes run after document.fonts.ready.
+   Word size is 0.86 of the box width at 760px and under, and 0.72 above that.
+   Springs 170/22/mass 1, sweep 1400ms, ping 7000ms, bar #F2A65A. */
 const WORD = 'LUMEN';
 const root = ref(null);
 let stop = () => {};
@@ -11,10 +16,11 @@ onMounted(() => {
   const reducedMq = matchMedia('(prefers-reduced-motion: reduce)');
   const noHover = matchMedia('(hover: none)').matches;
   let reduced = reducedMq.matches, raf = 0, last = 0, alive = true, t0 = performance.now(), mode = 'idle', px = null, tour = null, leaveT0 = 0, dragging = false, lastRelease = 0;
-  let R = 80, wordLeft = 0, wordRight = 0, barX = 0, barV = 0, barW = 8, barWV = 0, barOp = 0, barOpFrom = 0, barOpTo = 0, barOpT0 = 0, barY = 0, barInit = false;
+  let R = 80, wordLeft = 0, wordRight = 0, barX = 0, barV = 0, barW = 8, barWV = 0, barOp = 0, barOpFrom = 0, barOpTo = 0, barOpT0 = 0, barY = 0, barInit = false, armed = false;
   const onReduce = () => { reduced = reducedMq.matches; };
   reducedMq.addEventListener('change', onReduce);
   const measure = () => {
+    if (!armed) return;
     const box = el.getBoundingClientRect();
     const width = box.width || 640;
     probe.style.fontSize = '100px';
@@ -47,6 +53,7 @@ onMounted(() => {
     barY = box.height / 2 + fontSize * 0.44;
     el.dataset.w900 = L.map((l) => l.w900.toFixed(2)).join(',');
     el.dataset.w200 = L.map((l) => l.w200.toFixed(2)).join(',');
+    el.dataset.size = fontSize.toFixed(2);
   };
   const tourX = (now) => {
     const t = now - tour.t0;
@@ -59,7 +66,15 @@ onMounted(() => {
   const down = (e) => { dragging = true; move(e); };
   const up = () => { if (!dragging) return; dragging = false; lastRelease = performance.now(); if (noHover) mode = 'hold'; else { mode = 'leave'; L.forEach((l)=>l.leaveFrom=l.w); leaveT0 = performance.now(); barOpTo = 0; barOpFrom = barOp; barOpT0 = leaveT0; } };
   el.addEventListener('pointermove', move); el.addEventListener('pointerdown', down); el.addEventListener('pointerup', up); el.addEventListener('pointerleave', up);
-  const ro = new ResizeObserver(measure); ro.observe(el); measure();
+  const ro = new ResizeObserver(measure); ro.observe(el);
+  const begin = () => {
+    if (!alive || armed) return;
+    armed = true;
+    t0 = performance.now();
+    measure();
+    raf = requestAnimationFrame(frame);
+  };
+  document.fonts.load("100px 'Inter Var'").then(() => document.fonts.ready).then(begin, begin);
   const frame = (now) => {
     if (!alive) return;
     const dt = Math.min(0.05, (now-(last||now))/1000); last = now;
@@ -80,7 +95,7 @@ onMounted(() => {
       }
       l.w = Math.max(100, Math.min(900, l.w));
       l.node.style.opacity = l.op.toFixed(3);
-      l.node.style.fontVariationSettings = `'wght' ${l.w.toFixed(1)}`;
+      l.node.style.fontVariationSettings = `'wght' ${l.w.toFixed(1)}, 'opsz' 32`;
       if (l.w > heavy.w) heavy = l;
     });
     const curW = heavy.w200 + (heavy.w900 - heavy.w200) * ((heavy.w - 200) / (900 - 200));
@@ -93,17 +108,16 @@ onMounted(() => {
     if (noHover && !reduced && mode === 'idle' && introDone) { tour = { kind:'sweep', t0: now }; mode = 'tour'; barOpTo = 1; }
     raf = requestAnimationFrame(frame);
   };
-  raf = requestAnimationFrame(frame);
   stop = () => { alive = false; cancelAnimationFrame(raf); ro.disconnect(); el.removeEventListener('pointermove', move); el.removeEventListener('pointerdown', down); el.removeEventListener('pointerup', up); el.removeEventListener('pointerleave', up); reducedMq.removeEventListener('change', onReduce); };
 });
 onUnmounted(() => stop());
 </script>
 <template>
   <div ref="root" data-fw="weight" style="position:relative;height:100%;min-height:280px;background:#0E0E10;color:#E8E6E1;overflow:hidden">
-    <div data-word style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;line-height:0.9;letter-spacing:-0.035em;font-family:Inter,ui-sans-serif,system-ui,sans-serif">
+    <div data-word style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;line-height:0.9;font-family:'Inter Var',Inter,ui-sans-serif,system-ui,sans-serif">
       <div v-for="ch in WORD" :key="ch" data-cell style="display:flex;justify-content:center"><span :data-ch="ch" style="opacity:0">{{ ch }}</span></div>
     </div>
     <i data-bar="1" style="position:absolute;left:0;top:0;height:2px;background:#F2A65A;opacity:0" />
-    <span data-probe="1" aria-hidden="true" style="position:absolute;visibility:hidden;font-size:100px;white-space:pre;font-family:Inter,ui-sans-serif,system-ui,sans-serif" />
+    <span data-probe="1" aria-hidden="true" style="position:absolute;visibility:hidden;font-size:100px;white-space:pre;font-family:'Inter Var',Inter,ui-sans-serif,system-ui,sans-serif" />
   </div>
 </template>

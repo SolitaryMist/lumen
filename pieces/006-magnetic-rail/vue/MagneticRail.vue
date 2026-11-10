@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue';
-/* Mount: Vue 3. <MagneticRail /> in a box. Sigma 56, scale spring 280/28/0.1, bar 220/26, press 320/30.
+/* Mount: Vue 3. <MagneticRail /> in a box. Register this piece's inter-var.woff2 as family "Inter Var", weight 100 900.
+   Sigma 56, scale spring 280/28/0.1, bar 220/26, press 320/30.
    Guide uses cubic-bezier(0.45, 0, 0.55, 1) for 1400ms, then 8000ms cosine drift. */
 const NAMES = ['Rim', 'Mesh', 'Weight', 'Stack', 'Scale'];
 const CENTERS = [20, 92, 164, 236, 308];

@@ -30,6 +30,7 @@ Every piece ships five code surfaces: Web, SwiftUI, Compose, React, and Vue. The
 - React is a React 18 function component (`react/<Name>.jsx`). Vue is a Vue 3 single-file component (`vue/<Name>.vue`). Both are the implementation, not a frame around the web page.
 - Motion numbers and the drawn result match the web piece, including springs and, where the web piece uses a shader, that shader.
 - Each copy uses its own nodes. Do not use document-wide ids. Cancel animation frames and remove listeners when the component unmounts.
+- Pieces that ship `inter-var.woff2` use the family name "Inter Var". The host registers that file with `@font-face` (weight 100–900). Weight waits for `document.fonts.ready`, then probes each letter at 200 and 900. The word is 0.86 of the component width at 760px and under, and 0.72 above that.
 - Honor `prefers-reduced-motion`.
 - The code area keeps its height when the tab changes. At 390px the tab row scrolls sideways. Long lines scroll sideways inside the code area.
 - The live preview stays the web page. Copy and the repository link follow the selected tab.

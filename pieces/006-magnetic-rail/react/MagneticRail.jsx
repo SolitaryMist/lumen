@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 /* Mount: React 18, default export. Render <MagneticRail /> in a box.
+   Register this piece's inter-var.woff2 as family "Inter Var", weight 100 900.
    Gaussian sigma 56, scale spring 280/28/mass 0.1, bar 220/26, press 320/30.
    Guide 1400ms cubic-bezier(0.45, 0, 0.55, 1), then drift 0.5+0.5·cos over 8000ms.
    Each copy keeps its own nodes. */

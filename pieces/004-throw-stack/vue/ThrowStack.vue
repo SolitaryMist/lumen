@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue';
-/* Mount: Vue 3. <ThrowStack />. Snap spring 380/30, shift 260/26, tilt 200/24, fling 360ms. */
+/* Mount: Vue 3. <ThrowStack />. Register this piece's inter-var.woff2 as family "Inter Var", weight 100 900.
+   Snap spring 380/30, shift 260/26, tilt 200/24, fling 360ms. */
 const DATA = [
   { title: 'Rim Trace', sub: 'A rim of light that follows you' },
   { title: 'Dusk', sub: 'A gradient that breathes' },

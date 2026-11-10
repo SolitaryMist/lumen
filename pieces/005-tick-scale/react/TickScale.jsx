@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 /* Mount: React 18, default export. Render <TickScale /> in a tall box.
+   Register this piece's inter-var.woff2 as family "Inter Var", weight 100 900.
    24 ticks, value spring 200/24, grow 320/30, guide 0→100→20 then drift 50−30·cos. */
 
 const N = 24, K = 200, C = 24, KG = 320, CG = 30;

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 /* Mount: React 18, default export. Render <ThrowStack /> in a box at least 440px tall.
+   Register this piece's inter-var.woff2 as family "Inter Var", weight 100 900.
    Drag, tilt, and throw match the web piece: snap 380/30, shift 260/26, tilt 200/24. */
 
 const DATA = [

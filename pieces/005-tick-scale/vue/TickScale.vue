@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue';
-/* Mount: Vue 3. <TickScale /> in a tall box. 24 ticks, springs 200/24 and 320/30, guide then drift. */
+/* Mount: Vue 3. <TickScale /> in a tall box. Register this piece's inter-var.woff2 as family "Inter Var", weight 100 900.
+   24 ticks, springs 200/24 and 320/30, guide then drift. */
 const N = 24, K = 200, C = 24, KG = 320, CG = 30;
 const root = ref(null);
 let stop = () => {};
