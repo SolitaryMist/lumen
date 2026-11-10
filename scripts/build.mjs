@@ -12,7 +12,7 @@ for (const d of readdirSync('pieces', { withFileTypes: true })) {
   cpSync(`pieces/${d.name}`, `${out}/${d.name}`, { recursive: true });
   const code = {};
   const pick = (k, dir, re) => { const dd = `pieces/${d.name}${dir}`; if (!existsSync(dd)) return; const f = readdirSync(dd).find(n => re.test(n)); if (f) code[k] = `/${d.name}${dir}/${f}`; };
-  pick('web', '', /^index\.html$/); pick('swiftui', '/swiftui', /\.swift$/); pick('compose', '/android', /\.kt$/);
+  pick('web', '', /^index\.html$/); pick('swiftui', '/swiftui', /\.swift$/); pick('compose', '/android', /\.kt$/); pick('react', '/react', /\.jsx$/); pick('vue', '/vue', /\.vue$/);
   list.push({ code, slug: d.name, no: d.name.slice(0, 3), title: meta.title || d.name.slice(4).replace(/-/g, ' '), date: meta.date || '', tags: meta.tags || [] });
 }
 list.sort((a, b) => b.slug.localeCompare(a.slug));

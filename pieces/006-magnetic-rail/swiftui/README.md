@@ -1,0 +1,14 @@
+# Magnetic rail — SwiftUI
+
+Drop `MagneticRailView.swift` into an iOS 16+ SwiftUI target and bundle **Inter Variable** (add it to `UIAppFonts`; the name used is `Inter Variable`).
+
+- Five items — Rim, Mesh, Weight, Stack, Scale — in a 328pt row. Slots are 40pt and centers are 72pt apart. Scale is `scaleEffect` from the bottom, so the label baseline does not move.
+- Scale is `1 + 0.5 * exp(-d² / (2 σ²))` with σ = 56. The nearest item also lifts by `4 * hot * (scale - 1) / 0.5` points. Peak scale is 1.5.
+- Scale and highlight use stiffness 280, damping 28, mass 0.1. The amber bar slides with stiffness 220, damping 26, mass 1. A press springs the magnet to that center with stiffness 320, damping 30, mass 1. Same 1/240 s semi-implicit step as web and Compose. Platform form: `.spring(response: 0.32, dampingFraction: 0.82)` and, for the bar, `.spring(response: 0.36, dampingFraction: 0.80)`.
+- The bar is 2pt tall, amber `#FFB547` only, width equal to the nearest item's current visual width, radius 1pt.
+- Icons are stroked paths at 1.5pt: a circle, a 3×3 set of rings, three vertical bars, three rounded rectangles, five short ticks. No fill.
+- No fine pointer: after the 760ms entrance, a 1400ms guide runs normalized x from 0 to 1 with `timingCurve(0.45, 0, 0.55, 1)`. Drift is `0.5 + 0.5·cos(ωt)` over 8000ms, starting when the guide ends, so it sits at the right end with zero velocity and then moves left.
+- macOS, Mac Catalyst, and an iOS app on a Mac rest on the middle item. On iPhone and iPad, `GCMouse.mice()` (iOS 14+) is the list of connected mice. A non-empty list also rests on the middle item. An empty list uses the same 1400ms guide and 8000ms drift as iPhone. `onContinuousHover`'s active phase is a real hover: it leaves the guide and follows the pointer, which is how a trackpad that is not in `mice()` enters pointer-follow. `GCMouseDidConnect` moves a running guide back to the middle rest. `GCMouseDidDisconnect`, once the pointer has left the rail, starts the guide again. Leaving the rail while a mouse is still connected fades the bar over 200ms and returns every scale to 1. Entering again fades the bar in over 200ms from the pointer position. Reduce Motion stays static and overrides device changes. `UIScene.pointerLockState` is not used: it is nil when the scene cannot lock the pointer, which is lock availability rather than a connected device.
+- Entrance: stage opacity 160ms linear, items spring from 0.88 with a 60ms stagger. The bar stays hidden until 760ms. Reduce Motion holds every scale at 1 with the bar under the middle item and skips the entrance, guide, and drift.
+- Title is `clamp(28, 8% of width, 40)` with tracking −0.035em, 48pt above the icon row. Rail width is `min(560, 88% of width)`.
+- Parameters match the web piece (block at the top of the file). Not compiled here.
