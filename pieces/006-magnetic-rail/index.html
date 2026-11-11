@@ -45,7 +45,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0}
   <a href="https://x.com/aldininin" target="_blank" rel="noopener">@aldininin</a>
 </nav>
 <main class="stage" id="stage" aria-label="Magnetic rail. Proximity scale.">
-  <div class="cluster">
+  <div class="cluster" id="cluster">
     <header class="heading">
       <h1>Magnetic rail</h1>
       <p class="sub">Proximity scale</p>
@@ -179,6 +179,20 @@ function mix(t) {
   const c = Math.round(0x6B + (0xF2 - 0x6B) * u);
   return `rgb(${c},${c},${c})`;
 }
+/* Centring can land the cluster on a half pixel (e.g. 1080px tall viewports),
+   which smears the 2px amber bar across 3 rows. Shift it so the icon row sits on whole device pixels. */
+const clusterEl = document.getElementById('cluster');
+function snapCluster() {
+  const dpr = window.devicePixelRatio || 1;
+  clusterEl.style.transform = '';
+  const r = document.getElementById('row').getBoundingClientRect();
+  const dx = Math.round(r.left * dpr) / dpr - r.left;
+  const dy = Math.round(r.top * dpr) / dpr - r.top;
+  if (dx || dy) clusterEl.style.transform = `translate(${dx}px,${dy}px)`;
+}
+snapCluster();
+window.addEventListener('resize', snapCluster);
+if (document.fonts) document.fonts.ready.then(snapCluster);
 function snapEven(screenPx) {
   const dpr = window.devicePixelRatio || 1;
   return Math.round(screenPx * dpr / 2) * 2 / dpr;
