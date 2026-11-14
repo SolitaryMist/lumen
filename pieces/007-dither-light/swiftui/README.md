@@ -1,0 +1,14 @@
+# Dither Light — SwiftUI
+
+Drop `DitherLightView.swift` and `DitherLight.metal` into an iOS 16+ SwiftUI target and bundle **Inter Variable** (add it to `UIAppFonts`; the name used is `Inter Variable`). The Metal file has to be part of the same target so `ShaderLibrary.ditherLight` is generated.
+
+- A centred sphere, diameter `min(600, 62% of height, 84% of width)`. No ground and no shadow. Ink is only `#E8E6E1` on `#0B0B0C`, except the specular patch, which is `#FFB547` where the Blinn highlight is above 0.55.
+- iOS 17 and later draw it with `.colorEffect` and the stitchable Metal shader. The shader is the web fragment shader: 8×8 Bayer, one sample at the centre of each cell, filled squares. Cell side is `2·round(2·dpr)` device pixels, with dpr capped at 2, so the grid starts on an even device pixel. A press cross-fades that cell with `2·round(dpr)` over 240ms (`timingCurve(0.2, 0.8, 0.2, 1)`) and releases over 320ms (`timingCurve(0.4, 0, 0.2, 1)`). Cells stay integers.
+- iOS 16 draws a smooth radial-gradient sphere plus a small amber highlight. No dither.
+- Light is `normalize(lx, ly, 0.9)`, y positive downward. `lum = 0.06 + 0.94·max(0, N·L) · smoothstep(-0.05, 0.25, N·L)`. Specular exponent 40. Brightness multiplies `lum` so the dots grow in.
+- Rest pose is `(0.35, -0.45)`. The pointer offset is divided by the radius and clamped to length 1.2, then sprung with stiffness 170, damping 22, mass 1 (`.spring(response: 0.48, dampingFraction: 0.84)`).
+- No fine pointer: `lx` runs 0→0.6 over 1400ms with `timingCurve(0.45, 0, 0.55, 1)` and `ly` stays -0.35. Drift is `0.6·cos(ωt)` over 8000ms, starting when the guide ends, so it sits at +0.6 with zero velocity. After a drag, the light waits 2s, eases for 600ms to the nearer of ±0.6, then drifts from that end.
+- macOS, Mac Catalyst, and an iOS app on a Mac rest at the rest pose. On iPhone and iPad, `GCMouse.mice()` (iOS 14+) is the list of connected mice. A non-empty list also rests. An empty list uses the guide. `onContinuousHover`'s active phase promotes into pointer-follow, which is how a trackpad that is not in `mice()` enters pointer-follow. `GCMouseDidConnect` returns a running guide to the rest pose. `GCMouseDidDisconnect`, once the pointer has left, starts the guide again. Reduce Motion stays at rest and overrides device changes. `UIScene.pointerLockState` is not used: it reports lock availability rather than a connected device. Interface idiom is not used.
+- Entrance: opacity 160ms linear, brightness 0→1 over 600ms, title waits 120ms then fades and rises 4pt over 300ms. Reduce Motion keeps the light at rest, skips the brightness growth and the drift, and only fades opacity over 160ms. A press then switches cell size immediately.
+- Readout is azimuth and elevation in degrees, 13pt Inter Variable, monospaced digits, `#8A8A8A`, fixed-width so the marks do not shift.
+- Parameters match the web piece (block at the top of the file). Not compiled here.
