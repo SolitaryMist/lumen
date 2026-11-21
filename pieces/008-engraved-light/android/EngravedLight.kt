@@ -1,7 +1,7 @@
-// Guilloché — Lumen 008 (Jetpack Compose)
+// Engraved Light — Lumen 008 (Jetpack Compose)
 // Canvas drawPath. Source only: not compiled, not run on a device.
 // Put Inter Variable at res/font/inter_variable.ttf and grain.png at res/drawable/grain.png.
-package lumen.guilloche
+package lumen.engravedlight
 
 import android.content.Context
 import android.provider.Settings
@@ -63,7 +63,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 
-/* ===== Guilloché parameters (identical to web / SwiftUI) =====
+/* ===== Engraved Light parameters (identical to web / SwiftUI) =====
    CARD    Aspect 1.586, width min(640dp, 86% of the view). Face #121214,
            1dp stroke at 6% white, radius 20. Page #0B0B0C.
    RINGS   36. Centre (0.68W, 0.5H). 360 segments. Stroke 1dp.
@@ -370,7 +370,7 @@ private class Engine {
 }
 
 @Composable
-fun Guilloche(modifier: Modifier = Modifier) {
+fun EngravedLight(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val reduced = remember { reducedMotion(context) }
     val inter = remember { FontFamily(Font(R.font.inter_variable)) }
@@ -504,7 +504,7 @@ fun Guilloche(modifier: Modifier = Modifier) {
                     .alpha(typeU).graphicsLayer { translationY = rise },
                 verticalAlignment = Alignment.Bottom
             ) {
-                Text("Guilloché", color = GL.ink, fontFamily = inter, fontWeight = FontWeight.Medium, fontSize = 28.sp, letterSpacing = (-0.03).em)
+                Text("Engraved Light", color = GL.ink, fontFamily = inter, fontWeight = FontWeight.Medium, fontSize = 28.sp, letterSpacing = (-0.03).em, maxLines = 1, softWrap = false)
                 Spacer(Modifier.weight(1f))
                 Text("Nº 008", color = GL.sub, fontFamily = inter, fontWeight = FontWeight.Medium, fontSize = 13.sp)
             }

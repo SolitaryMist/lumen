@@ -1,6 +1,6 @@
-# Guilloché — SwiftUI
+# Engraved Light — SwiftUI
 
-Drop `GuillocheView.swift` into an iOS 17+ target. Bundle **Inter Variable** (the face name is `Inter Variable`) and add `grain.png` from this piece as an image asset named `grain`.
+Drop `EngravedLightView.swift` into an iOS 17+ target. Bundle **Inter Variable** (the face name is `Inter Variable`) and add `grain.png` from this piece as an image asset named `grain`.
 
 This file is source only. It was not compiled, and it was not run on a device.
 
@@ -12,4 +12,4 @@ This file is source only. It was not compiled, and it was not run on a device.
 - No fine pointer: `θ` runs −60° → +50° in 760ms, then +50° → −30° in 640ms, each `timingCurve(0.65, 0, 0.35, 1)`. Drift is `θ = 10° − 40°·cos(2πt/8s)` from that same clock, so the join is −30° with velocity 0. Light y stays 0.45.
 - macOS, Mac Catalyst, and an iOS app on a Mac stay at rest. On iPhone and iPad, a connected mouse does too. Otherwise the guide runs, and a hover promotes into pointer follow.
 - Entrance fades the card over 160ms. Each ring fades over 300ms, stagger 40ms from the inside, instead of a stroke draw. Type fades over 300ms and rises 4pt after the outer ring. Reduce Motion jumps to rest, fades over 200ms, and does not drift.
-- Labels: `LUMEN`, `Guilloché`, `Nº 008`. Grain sits at 3% opacity.
+- Labels: `LUMEN`, `Engraved Light`, `Nº 008`. Grain sits at 3% opacity.

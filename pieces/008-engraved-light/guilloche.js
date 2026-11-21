@@ -1,4 +1,4 @@
-/* Guilloché — Lumen 008
+/* Engraved Light — Lumen 008
    Same numbers on the web page, React, and Vue. SwiftUI and Compose
    repeat them (360 samples, 12 buckets, ring fade instead of a stroke draw).
 
@@ -221,7 +221,7 @@ function ensureStyle() {
   -webkit-font-smoothing:antialiased}
 .g-brand{position:absolute;top:26px;left:28px;font-size:11px;font-weight:600;letter-spacing:.12em;line-height:1;color:#8A8A8A}
 .g-foot{position:absolute;left:28px;right:28px;bottom:24px;display:flex;align-items:baseline;justify-content:space-between;pointer-events:none}
-.g-title{font-size:28px;font-weight:500;letter-spacing:-0.03em;line-height:1;color:#E8E6E1}
+.g-title{font-size:28px;font-weight:500;letter-spacing:-0.03em;line-height:1;color:#E8E6E1;white-space:nowrap}
 .g-num{font-size:13px;font-weight:500;line-height:1;color:#8A8A8A;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
 @media (prefers-reduced-motion:reduce){
   .g-brand,.g-title,.g-num{transform:none}
@@ -271,15 +271,15 @@ function lightBuckets(rings, W, H, lx, ly, k, segments, buckets) {
  * Mount one card inside root. The host supplies a box with a height.
  * Returns a handle; call destroy() on unmount.
  */
-export function mountGuilloche(root) {
-  if (!root) throw new Error('mountGuilloche needs a host');
+export function mountEngravedLight(root) {
+  if (!root) throw new Error('mountEngravedLight needs a host');
   ensureStyle();
   alive += 1;
   if (getComputedStyle(root).position === 'static') root.style.position = 'relative';
 
   const stage = document.createElement('main');
   stage.className = 'g-stage';
-  stage.setAttribute('aria-label', 'Guilloché. Engraved lines that catch the light.');
+  stage.setAttribute('aria-label', 'Engraved Light. Engraved lines that catch the light.');
   const card = document.createElement('article');
   card.className = 'g-card';
   const canvas = document.createElement('canvas');
@@ -294,7 +294,7 @@ export function mountGuilloche(root) {
   foot.className = 'g-foot';
   const title = document.createElement('h1');
   title.className = 'g-title';
-  title.textContent = 'Guilloché';
+  title.textContent = 'Engraved Light';
   const num = document.createElement('p');
   num.className = 'g-num';
   num.textContent = 'Nº 008';

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { mountGuilloche } from '../guilloche.js';
+import { mountEngravedLight } from '../guilloche.js';
 
-/* Mount: React 18, default export. Render <Guilloche /> in a box with a height.
+/* Mount: React 18, default export. Render <EngravedLight /> in a box with a height.
    The host registers this piece's inter-var.woff2 as family "Inter Var", weight 100–900.
    36 rings, 720 segments, 24 brightness buckets. Light spring 170 / 22 / 1.
    Press spring 280 / 28 / 1, k from 8 to 24, release keeps velocity.
@@ -11,10 +11,10 @@ import { mountGuilloche } from '../guilloche.js';
    Reduced motion: rest pose, 200ms fade, no stroke draw, no drift.
    Each copy keeps its own canvas, listeners, and frame. */
 
-export default function Guilloche() {
+export default function EngravedLight() {
   const ref = useRef(null);
   useEffect(() => {
-    const handle = mountGuilloche(ref.current);
+    const handle = mountEngravedLight(ref.current);
     return () => handle.destroy();
   }, []);
   return <div ref={ref} style={{ position: 'relative', width: '100%', height: '100%' }} />;

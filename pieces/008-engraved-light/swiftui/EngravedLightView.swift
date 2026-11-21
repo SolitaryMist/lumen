@@ -1,4 +1,4 @@
-// Guilloché — Lumen 008 (SwiftUI, iOS 17+)
+// Engraved Light — Lumen 008 (SwiftUI, iOS 17+)
 // Canvas draws the engraved rings. Source only: not compiled, not run on a device.
 // Bundle Inter Variable and a "grain" image (the piece's grain.png).
 import SwiftUI
@@ -12,7 +12,7 @@ import UIKit
 import AppKit
 #endif
 
-/* ===== Guilloché parameters (identical to web / Compose) =====
+/* ===== Engraved Light parameters (identical to web / Compose) =====
    CARD    Aspect 1.586, width min(640, 86% of the view). Face #121214,
            1pt stroke rgba white 0.06, radius 20. Page #0B0B0C.
    RINGS   36. Centre (0.68W, 0.5H). r = H·(0.10+0.012i).
@@ -185,7 +185,7 @@ private func cappedScale() -> CGFloat {
     #endif
 }
 
-final class GuillocheModel {
+final class EngravedLightModel {
     enum Phase { case rest, follow, guide, drift }
     var lx = GL.restU * 2 - 1
     var ly = GL.restV
@@ -319,9 +319,9 @@ final class GuillocheModel {
     }
 }
 
-struct GuillocheView: View {
+struct EngravedLightView: View {
     @Environment(\.accessibilityReduceMotion) private var reduced
-    @State private var model = GuillocheModel()
+    @State private var model = EngravedLightModel()
 
     var body: some View {
         GeometryReader { geo in
@@ -368,7 +368,7 @@ struct GuillocheView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Guilloché. Engraved lines that catch the light.")
+        .accessibilityLabel("Engraved Light. Engraved lines that catch the light.")
     }
 
     private var links: some View {
@@ -397,10 +397,11 @@ struct GuillocheView: View {
             VStack {
                 Spacer()
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Guilloché")
+                    Text("Engraved Light")
                         .font(.custom("Inter Variable", size: 28).weight(.medium))
                         .tracking(28 * -0.03)
                         .foregroundStyle(GL.ink)
+                        .lineLimit(1)
                     Spacer()
                     Text("Nº 008")
                         .font(.custom("Inter Variable", size: 13).weight(.medium))
@@ -432,7 +433,7 @@ struct GuillocheView: View {
     }
 }
 
-private func strokeRings(_ ctx: GraphicsContext, model: GuillocheModel, w: Double, h: Double) {
+private func strokeRings(_ ctx: GraphicsContext, model: EngravedLightModel, w: Double, h: Double) {
     let scale = Double(cappedScale())
     func snap(_ v: Double) -> CGFloat { CGFloat((v * scale).rounded() / scale) }
     let theta = model.lx * GL.thetaScale * .pi / 180

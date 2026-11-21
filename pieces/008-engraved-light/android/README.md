@@ -1,6 +1,6 @@
-# Guilloché — Jetpack Compose
+# Engraved Light — Jetpack Compose
 
-Add `Guilloche.kt` to a Compose module. Put Inter Variable at `res/font/inter_variable.ttf` and the piece's `grain.png` at `res/drawable/grain.png`.
+Add `EngravedLight.kt` to a Compose module. Put Inter Variable at `res/font/inter_variable.ttf` and the piece's `grain.png` at `res/drawable/grain.png`.
 
 This file is source only. It was not compiled, and it was not run on a device.
 
@@ -12,4 +12,4 @@ This file is source only. It was not compiled, and it was not run on a device.
 - No fine pointer: `θ` runs −60° → +50° in 760ms, then +50° → −30° in 640ms, each `CubicBezierEasing(0.65, 0, 0.35, 1)`. Drift is `θ = 10° − 40°·cos(2πt/8000ms)` from the same clock, joined at −30° with velocity 0. Light y stays 0.45.
 - `SOURCE_MOUSE` or `SOURCE_TOUCHPAD` at launch stays at rest. A mouse or stylus hover promotes into pointer follow. Animator duration scale 0 keeps the rest pose, fades over 200ms, and does not drift.
 - Entrance fades the card over 160ms. Each ring fades over 300ms, stagger 40ms, instead of a stroke draw. Type fades over 300ms and rises 4dp after the outer ring.
-- Labels: `LUMEN`, `Guilloché`, `Nº 008`. The grain image is static at 3% opacity.
+- Labels: `LUMEN`, `Engraved Light`, `Nº 008`. The grain image is static at 3% opacity.

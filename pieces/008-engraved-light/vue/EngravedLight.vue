@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue';
-import { mountGuilloche } from '../guilloche.js';
+import { mountEngravedLight } from '../guilloche.js';
 
 /* Vue 3 single-file component. The host registers inter-var.woff2 as "Inter Var".
    Motion matches the web piece: 36 rings, 720 segments, springs 170/22 and 280/28,
@@ -12,7 +12,7 @@ const root = ref(null);
 let handle = null;
 
 onMounted(() => {
-  handle = mountGuilloche(root.value);
+  handle = mountEngravedLight(root.value);
 });
 
 onBeforeUnmount(() => {
