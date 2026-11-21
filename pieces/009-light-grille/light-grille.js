@@ -1,734 +1,687 @@
-/* Light Grille — Lumen 009
-   Same numbers on the web page, React, and Vue. SwiftUI and Compose
-   notes live in their README files (source not in this folder).
-
-   CARD     360×480, aspect 3/4, width min(360px, 86vw). Face #121214,
-            1px line rgba(255,255,255,.06), radius 20. Page #0B0B0C.
-            Grain tile 128px at 3%. Type is Geist, one weight (600).
-   TYPE     Top left LUMEN 12 / 0.08em / #55545D.
-            Top right Nº 009 12 / 0.04em / #55545D.
-            Bottom left Light Grille 22 / -0.03em / #E8E6E1.
-   GRID     240×240, centred. 12×12 cells of 20. Each slit 2×14, radius 1.
-            Base fill is rgba(255,255,255,.04) on the face.
-            Secondary leak is rgba(232,230,225,.16) over #55545D.
-   HOVER    Height 14 → 18 with distance. offsetX = clamp(-4, dx*0.05, 4),
-            dx = focusX − slitX. One nearest slit is #FFB547.
-            Others fall with d^-1.5 toward the leak, then #55545D, then base.
-            Spring stiffness 240, damping 22, mass 1.
-            CSS 320ms cubic-bezier(0.16,1,0.3,1).
-            SwiftUI response 0.34, dampingFraction 0.78.
-   PRESS    Card scale 0.98. Slits go to 16×2 and gather on the horizontal
-            mid-line, forming one band. Midpoint #FFB547, sides fade to
-            rgba(255,181,71,.15). Spring 380 / 26.
-            CSS 180ms cubic-bezier(0.05,0.7,0.1,1).
-            SwiftUI response 0.22, dampingFraction 0.65.
-   GUIDE    From (−60, 40) along a reverse arc into (60, −40) in 480ms.
-            Opacity 0→1 in the first 160ms, cubic-bezier(0,0,0.2,1).
-            Then pos(t) = (60 cos(2πt/8000), −40 cos(2πt/8000)), t from
-            the end of the guide. Velocity is 0 at 0s / 4s / 8s.
-            The pointer leaving returns to this path.
-   REDUCED  No guide, no drift, no press scale, no offset. Focus stays at
-            the origin. The nearest centre slit holds #FFB547, still.
-   ================================================================= */
-
 export const P = {
-  cardW: 360,
-  cardH: 480,
+  cols: 10,
+  rows: 10,
+  aspect: 4 / 3,
+  cardMax: 420,
+  cardVw: 0.86,
   radius: 20,
-  grid: 240,
-  cols: 12,
-  rows: 12,
-  cell: 20,
-  slitW: 2,
-  slitH: 14,
-  slitR: 1,
-  hMax: 18,
-  offsetMax: 4,
-  offsetK: 0.05,
-  pressW: 16,
-  pressH: 2,
-  pressScale: 0.98,
-  amber: [255, 181, 71],
-  gray: [85, 84, 93],
-  face: [18, 18, 20],
-  ink: [232, 230, 225],
-  followK: 240,
-  followC: 22,
-  followM: 1,
-  pressK: 380,
-  pressC: 26,
-  pressM: 1,
-  swiftFollow: [0.34, 0.78],
-  swiftPress: [0.22, 0.65],
-  guideMs: 480,
-  fadeMs: 160,
+  gridFrac: 0.66,
+  slatW: 0.028,
+  slatH: 0.05,
+  slatRadius: 1,
+  heightMax: 1.35,
+  rotGain: 0.3,
+  rotMax: 25,
+  closeRot: 75,
+  holdHeight: 1.50,
+  holdWidth: 0.80,
+  holdBright: 1.20,
+  followK: 260,
+  followC: 24,
+  mass: 1,
+  holdK: 420,
+  holdC: 28,
+  releaseK: 300,
+  releaseC: 20,
+  releaseStagger: 18,
+  cardScaleHeld: 0.98,
+  cardFade: 160,
   reducedFade: 200,
+  growMs: 600,
+  growEase: [0.16, 1, 0.3, 1],
+  growStagger: 12,
+  guideDelay: 760,
+  guideMs: 520,
+  guideEase: [0.22, 1, 0.36, 1],
   driftPeriod: 8000,
-  driftX: 60,
-  driftY: -40,
-  easeFade: [0, 0, 0.2, 1],
-  easeGuide: [0.16, 1, 0.3, 1],
-  dprCap: 2,
-  joinEps: 0.35
+  ampX: 50,
+  ampY: 35,
+  charRadiusFrac: 0.22,
+  pageBg: "#0B0B0C",
+  cardBg: "#121214",
+  ink: "#E8E6E1",
+  dim: "#55545D",
+  amber: "#FFB547",
+  slatBase: "rgba(255,255,255,.05)",
+  slatLit: "rgba(232,230,225,.22)",
+  border: "rgba(255,255,255,.06)",
+  grainSize: 128,
+  grainOpacity: 0.03,
+  brandSize: 12,
+  titleSize: 22,
+  titleTracking: -0.03,
+  dprCap: 2
 };
 
 export function bez(x1, y1, x2, y2) {
-  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
-  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
-  const X = (t) => ((ax * t + bx) * t + cx) * t;
-  const Y = (t) => ((ay * t + by) * t + cy) * t;
-  const dX = (t) => (3 * ax * t + 2 * bx) * t + cx;
-  return (x) => {
+  if (x1 === y1 && x2 === y2) return (t) => t;
+  const sampleValues = new Float32Array(11);
+  for (let i = 0; i < 11; ++i) {
+    sampleValues[i] = calcBezier(i * 0.1, x1, x2);
+  }
+  function calcBezier(t, a1, a2) {
+    return (((1 - 3 * a2 + 3 * a1) * t + (3 * a2 - 6 * a1)) * t + 3 * a1) * t;
+  }
+  function getSlope(t, a1, a2) {
+    return 3 * (1 - 3 * a2 + 3 * a1) * t * t + 2 * (3 * a2 - 6 * a1) * t + 3 * a1;
+  }
+  function solveT(x) {
+    let intervalStart = 0.0;
+    let currentSample = 1;
+    for (; currentSample !== 10 && sampleValues[currentSample] <= x; ++currentSample) {
+      intervalStart += 0.1;
+    }
+    --currentSample;
+    let dist = (x - sampleValues[currentSample]) / (sampleValues[currentSample + 1] - sampleValues[currentSample]);
+    let guessT = intervalStart + dist * 0.1;
+    let initialSlope = getSlope(guessT, x1, x2);
+    if (initialSlope >= 0.001) {
+      for (let i = 0; i < 4; ++i) {
+        let currentX = calcBezier(guessT, x1, x2) - x;
+        let currentSlope = getSlope(guessT, x1, x2);
+        if (currentSlope === 0.0) break;
+        guessT -= currentX / currentSlope;
+      }
+      return guessT;
+    }
+    if (initialSlope === 0.0) return guessT;
+    let a = intervalStart;
+    let b = intervalStart + 0.1;
+    let currentX, t;
+    let i = 0;
+    do {
+      t = a + (b - a) / 2.0;
+      currentX = calcBezier(t, x1, x2) - x;
+      if (currentX > 0.0) {
+        b = t;
+      } else {
+        a = t;
+      }
+    } while (Math.abs(currentX) > 0.0000001 && ++i < 10);
+    return t;
+  }
+  return function(x) {
     if (x <= 0) return 0;
     if (x >= 1) return 1;
-    let t = x;
-    for (let i = 0; i < 8; i++) {
-      const e = X(t) - x, d = dX(t);
-      if (Math.abs(e) < 1e-6 || Math.abs(d) < 1e-6) break;
-      t -= e / d;
-    }
-    if (t < 0 || t > 1) {
-      let a = 0, b = 1;
-      t = x;
-      for (let i = 0; i < 30; i++) {
-        const v = X(t);
-        if (v < x) a = t;
-        else b = t;
-        t = (a + b) / 2;
-      }
-    }
-    return Y(Math.min(1, Math.max(0, t)));
+    return calcBezier(solveT(x), y1, y2);
   };
 }
 
-export const easeFade = bez(...P.easeFade);
-export const easeGuide = bez(...P.easeGuide);
-
-export function spring(pos, vel, target, dt, k, c, m) {
-  if (!(dt > 0)) return [pos, vel];
+export function spring(pos, vel, target, dt, k, c, m = 1) {
   const n = Math.max(1, Math.round(dt * 240));
-  const h = dt / n;
-  for (let s = 0; s < n; s++) {
-    vel += ((-k * (pos - target) - c * vel) / m) * h;
-    pos += vel * h;
+  const subDt = dt / n;
+  let p = pos;
+  let v = vel;
+  for (let i = 0; i < n; i++) {
+    const a = (-k * (p - target) - c * v) / m;
+    v += a * subDt;
+    p += v * subDt;
   }
-  return [pos, vel];
+  return { pos: p, vel: v };
 }
 
 export function clamp(v, a, b) {
-  return v < a ? a : v > b ? b : v;
+  return Math.min(b, Math.max(a, v));
 }
 
-export function mix(a, b, t) {
-  const u = clamp(t, 0, 1);
-  return [
-    a[0] + (b[0] - a[0]) * u,
-    a[1] + (b[1] - a[1]) * u,
-    a[2] + (b[2] - a[2]) * u
-  ];
+let styleRefCount = 0;
+let injectedStyleEl = null;
+
+function injectStyles() {
+  if (styleRefCount === 0) {
+    injectedStyleEl = document.createElement('style');
+    injectedStyleEl.setAttribute('data-light-grille', '');
+    injectedStyleEl.textContent = `
+      .g-stage {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background-color: ${P.pageBg};
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        overscroll-behavior: none;
+        visibility: hidden;
+      }
+      .g-stage.on {
+        visibility: visible;
+      }
+      .g-card {
+        position: relative;
+        width: min(${P.cardMax}px, ${P.cardVw * 100}vw, 60vh);
+        aspect-ratio: 3 / 4;
+        background: ${P.cardBg};
+        border: 1px solid ${P.border};
+        border-radius: ${P.radius}px;
+        box-sizing: border-box;
+        overflow: hidden;
+        opacity: 0;
+        transform-origin: center center;
+        touch-action: none;
+        will-change: opacity, transform;
+      }
+      body.og .g-card {
+        width: min(${P.cardMax}px, ${P.cardVw * 100}vw);
+      }
+      .g-grille {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 66%;
+        aspect-ratio: 1;
+        transform: translate(-50%, -50%);
+        perspective: 800px;
+        transform-style: preserve-3d;
+        pointer-events: none;
+      }
+      .g-slat {
+        position: absolute;
+        border-radius: ${P.slatRadius}px;
+        transform-origin: center center;
+        will-change: transform, width, height, background;
+      }
+      .g-grain {
+        position: absolute;
+        inset: 0;
+        opacity: ${P.grainOpacity};
+        pointer-events: none;
+        background: url("./grain.png") repeat;
+        background-size: ${P.grainSize}px ${P.grainSize}px;
+        z-index: 2;
+      }
+      .g-brand {
+        position: absolute;
+        top: 22px;
+        left: 24px;
+        font-size: ${P.brandSize}px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        color: ${P.dim};
+        font-family: "Geist", Geist, ui-sans-serif, system-ui, sans-serif;
+        margin: 0;
+        line-height: 1;
+        z-index: 3;
+      }
+      .g-foot {
+        position: absolute;
+        left: 24px;
+        right: 24px;
+        bottom: 22px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        pointer-events: none;
+        z-index: 3;
+      }
+      .g-title {
+        font-size: ${P.titleSize}px;
+        font-weight: 500;
+        letter-spacing: ${P.titleTracking}em;
+        color: ${P.ink};
+        white-space: nowrap;
+        margin: 0;
+        font-family: "Geist", Geist, ui-sans-serif, system-ui, sans-serif;
+        line-height: 1;
+      }
+      .g-num {
+        font-size: 12px;
+        font-weight: 500;
+        color: ${P.dim};
+        font-variant-numeric: tabular-nums;
+        margin: 0;
+        font-family: "Geist", Geist, ui-sans-serif, system-ui, sans-serif;
+        line-height: 1;
+      }
+    `;
+    document.head.appendChild(injectedStyleEl);
+  }
+  styleRefCount++;
 }
 
-export function over(bg, fg, a) {
-  return [
-    bg[0] + (fg[0] - bg[0]) * a,
-    bg[1] + (fg[1] - bg[1]) * a,
-    bg[2] + (fg[2] - bg[2]) * a
-  ];
-}
-
-export const COL = {
-  base: over(P.face, [255, 255, 255], 0.04),
-  gray: P.gray,
-  leak: over(P.gray, P.ink, 0.16),
-  amber: P.amber,
-  pressSide: over(P.face, P.amber, 0.15)
-};
-
-/** Cell centres in grid space, origin at the grid centre, y down. */
-export function cellCenter(col, row) {
-  return [
-    (col + 0.5) * P.cell - P.grid / 2,
-    (row + 0.5) * P.cell - P.grid / 2
-  ];
-}
-
-/**
- * Reverse arc from the lower-left end (−60, 40) into the upper-right
- * drift start (60, −40). The bow sits off the diagonal so the path is
- * not the later drift line. u is 0..1 after easing.
- */
-export function guidePos(u) {
-  const t = clamp(u, 0, 1);
-  const p0x = -P.driftX, p0y = -P.driftY;
-  const p3x = P.driftX, p3y = P.driftY;
-  const cx = p3x - p0x, cy = p3y - p0y;
-  const len = Math.hypot(cx, cy) || 1;
-  // Bow toward the upper left. End handle stays on the chord so the
-  // arrival heads up-right, opposite the drift as it leaves (60, −40).
-  const bx = (cy / len) * 48;
-  const by = (-cx / len) * 48;
-  const p1x = p0x + cx * 0.32 + bx;
-  const p1y = p0y + cy * 0.32 + by;
-  const p2x = p3x - cx * 0.35;
-  const p2y = p3y - cy * 0.35;
-  const omt = 1 - t;
-  const x = omt*omt*omt*p0x + 3*omt*omt*t*p1x + 3*omt*t*t*p2x + t*t*t*p3x;
-  const y = omt*omt*omt*p0y + 3*omt*omt*t*p1y + 3*omt*t*t*p2y + t*t*t*p3y;
-  return [x, y];
-}
-
-/** Shared clock: guide, then cosine drift. t = 0 at the start of the guide. */
-export function scheduledPos(elapsed) {
-  const el = elapsed > 0 ? elapsed : 0;
-  if (el < P.guideMs) return guidePos(easeGuide(el / P.guideMs));
-  const w = ((el - P.guideMs) / P.driftPeriod) * Math.PI * 2;
-  const c = Math.cos(w);
-  return [P.driftX * c, P.driftY * c];
-}
-
-export function leakColor(d) {
-  const raw = Math.pow(Math.max(d, 1), -1.5);
-  const ref = Math.pow(P.cell, -1.5);
-  const t = clamp(raw / ref, 0, 1);
-  if (t >= 0.45) return mix(COL.gray, COL.leak, (t - 0.45) / 0.55);
-  return mix(COL.base, COL.gray, t / 0.45);
-}
-
-export function pressColor(x, peakX) {
-  const span = P.grid / 2;
-  const u = clamp(Math.abs(x - peakX) / span, 0, 1);
-  return mix(COL.amber, COL.pressSide, u);
-}
-
-export function rgbCss(c) {
-  return `rgb(${c[0].toFixed(3)},${c[1].toFixed(3)},${c[2].toFixed(3)})`;
-}
-
-export function nearAmber(c, tol = 8) {
-  return Math.abs(c[0] - 255) <= tol && Math.abs(c[1] - 181) <= tol && Math.abs(c[2] - 71) <= tol;
-}
-
-let styleEl = null;
-let alive = 0;
-
-function grainHref() {
-  try {
-    return new URL('./grain.png', import.meta.url).href;
-  } catch {
-    return 'grain.png';
+function dropStyles() {
+  styleRefCount--;
+  if (styleRefCount === 0 && injectedStyleEl) {
+    injectedStyleEl.remove();
+    injectedStyleEl = null;
   }
 }
 
-function ensureStyle() {
-  if (styleEl && styleEl.isConnected) return;
-  const style = document.createElement('style');
-  styleEl = style;
-  const grain = grainHref();
-  style.textContent = `
-.lg-stage{position:absolute;inset:0;display:grid;place-items:center;background:#0B0B0C;visibility:hidden;overflow:hidden;
-  user-select:none;-webkit-user-select:none;overscroll-behavior:none;touch-action:none}
-.lg-stage.on{visibility:visible}
-.lg-card{position:relative;width:min(360px,86vw);aspect-ratio:3/4;background:#121214;border:1px solid rgba(255,255,255,.06);
-  border-radius:20px;box-sizing:border-box;overflow:hidden;opacity:0}
-.lg-card canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-.lg-grain{position:absolute;inset:0;pointer-events:none;opacity:.03;background:url("${grain}") repeat;background-size:128px 128px}
-.lg-brand,.lg-title,.lg-num{margin:0;font-family:Geist,ui-sans-serif,system-ui,sans-serif;font-weight:600;
-  -webkit-font-smoothing:antialiased;line-height:1;pointer-events:none}
-.lg-brand{position:absolute;top:calc(24px * var(--s,1));left:calc(24px * var(--s,1));font-size:calc(12px * var(--s,1));
-  letter-spacing:.08em;color:#55545D}
-.lg-num{position:absolute;top:calc(24px * var(--s,1));right:calc(24px * var(--s,1));font-size:calc(12px * var(--s,1));
-  letter-spacing:.04em;color:#55545D;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
-.lg-title{position:absolute;left:calc(24px * var(--s,1));bottom:calc(24px * var(--s,1));font-size:calc(22px * var(--s,1));
-  letter-spacing:-0.03em;color:#E8E6E1;white-space:nowrap}
-@media (prefers-reduced-motion:reduce){
-  .lg-card{transform:none}
-}`;
-  document.head.appendChild(style);
-}
-
-/**
- * Mount one card inside root. The host supplies a box with a height.
- * Returns a handle; call destroy() on unmount.
- */
 export function mountLightGrille(root) {
   if (!root) throw new Error('mountLightGrille needs a host');
-  ensureStyle();
-  alive += 1;
   if (getComputedStyle(root).position === 'static') root.style.position = 'relative';
+  injectStyles();
+
+  const growBez = bez(...P.growEase);
+  const guideBez = bez(...P.guideEase);
 
   const stage = document.createElement('main');
-  stage.className = 'lg-stage';
-  stage.setAttribute('aria-label', 'Light Grille. Light leaks through dynamic physical aperture grids.');
+  stage.className = 'g-stage';
+  stage.setAttribute('aria-label', 'Light Grille. Light through a fine grille.');
+
   const card = document.createElement('article');
-  card.className = 'lg-card';
-  const canvas = document.createElement('canvas');
-  canvas.setAttribute('aria-hidden', 'true');
+  card.className = 'g-card';
+
+  const grille = document.createElement('div');
+  grille.className = 'g-grille';
+
   const grain = document.createElement('div');
-  grain.className = 'lg-grain';
-  grain.setAttribute('aria-hidden', 'true');
+  grain.className = 'g-grain';
+
   const brand = document.createElement('p');
-  brand.className = 'lg-brand';
+  brand.className = 'g-brand';
   brand.textContent = 'LUMEN';
-  const num = document.createElement('p');
-  num.className = 'lg-num';
-  num.textContent = 'Nº 009';
+
+  const foot = document.createElement('div');
+  foot.className = 'g-foot';
+
   const title = document.createElement('h1');
-  title.className = 'lg-title';
+  title.className = 'g-title';
   title.textContent = 'Light Grille';
-  card.append(canvas, grain, brand, num, title);
-  stage.append(card);
-  root.append(stage);
 
-  const boot = {
-    stageHidden: getComputedStyle(stage).visibility,
-    fontWait: true
-  };
-  stage.dataset.ready = '0';
-  stage.dataset.phase = 'guide';
+  const num = document.createElement('p');
+  num.className = 'g-num';
+  num.textContent = 'Nº 009';
 
-  const ctx = canvas.getContext('2d', { alpha: false });
-  const reduceMq = matchMedia('(prefers-reduced-motion: reduce)');
-  const ac = new AbortController();
-  const signal = ac.signal;
+  foot.appendChild(title);
+  foot.appendChild(num);
 
-  let reduced = reduceMq.matches;
-  let phase = reduced ? 'rest' : 'guide';
-  let fx = 0, fy = 0, vx = 0, vy = 0;
-  let targetX = 0, targetY = 0;
-  let press = 0, pv = 0, pressing = false;
-  let scale = 1, sv = 0;
-  let t0 = 0, last = 0, ready = false, raf = 0, dead = false;
-  let returning = false;
-  let dpr = 1, W = 1, H = 1, unit = 1;
-  let amberIndex = -1;
-  let amberCount = 0;
-  const trace = [];
-  const slits = new Array(P.cols * P.rows);
+  card.appendChild(grille);
+  card.appendChild(grain);
+  card.appendChild(brand);
+  card.appendChild(foot);
+  stage.appendChild(card);
+  root.appendChild(stage);
 
-  function arm(now) {
-    t0 = now;
-    last = 0;
-    press = 0; pv = 0;
-    scale = 1; sv = 0;
-    returning = false;
-    if (reduced) {
-      fx = 0; fy = 0; vx = 0; vy = 0;
-      targetX = 0; targetY = 0;
-      phase = 'rest';
-      return;
-    }
-    const p = scheduledPos(0);
-    fx = p[0]; fy = p[1];
-    vx = 0; vy = 0;
-    targetX = fx; targetY = fy;
-    phase = 'guide';
-  }
+  const slatElements = [];
+  const slatS = new Float32Array(100);
+  const slatSVel = new Float32Array(100);
 
-  function mapEvent(e) {
-    const rect = card.getBoundingClientRect();
-    const s = Math.max(1e-6, rect.width / P.cardW);
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    return [(e.clientX - cx) / s, (e.clientY - cy) / s];
-  }
-
-  function fineEvent(e) {
-    return e.pointerType === 'mouse' || e.pointerType === 'pen';
-  }
-
-  function resize() {
-    const rect = card.getBoundingClientRect();
-    const next = Math.max(1, Math.min(P.dprCap, window.devicePixelRatio || 1));
-    const bw = Math.max(1, Math.round(rect.width * next));
-    const bh = Math.max(1, Math.round(rect.height * next));
-    dpr = next;
-    W = rect.width;
-    H = rect.height;
-    unit = W / P.cardW;
-    card.style.setProperty('--s', String(unit));
-    if (canvas.width !== bw || canvas.height !== bh) {
-      canvas.width = bw;
-      canvas.height = bh;
+  for (let r = 0; r < P.rows; r++) {
+    for (let c = 0; c < P.cols; c++) {
+      const slat = document.createElement('div');
+      slat.className = 'g-slat';
+      grille.appendChild(slat);
+      slatElements.push(slat);
     }
   }
 
-  function pickAmber(peakX, peakY, p) {
-    let best = 0, bestD = Infinity, bestTie = Infinity;
-    const n = P.cols * P.rows;
-    for (let i = 0; i < n; i++) {
-      const layout = slitLayout(i, peakX, peakY, p);
-      const d = Math.hypot(layout.x - peakX, layout.y - peakY);
-      const tie = layout.row * P.cols + layout.col;
-      if (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && tie < bestTie)) {
-        best = i;
-        bestD = d;
-        bestTie = tie;
-      }
-    }
-    return best;
+  const mediaReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const mediaFine = window.matchMedia('(hover: hover) and (pointer: fine)');
+
+  let reduced = mediaReduced.matches;
+  let finePointer = mediaFine.matches && !reduced;
+  let phase = finePointer || reduced ? 'rest' : 'guide';
+
+  const boot = { fontWait: true };
+  let ready = false;
+  let pressing = false;
+  let lx = 0, ly = 0;
+  let lxVel = 0, lyVel = 0;
+  let pointerTargetX = 0, pointerTargetY = 0;
+  let cardScale = 1.0;
+  let cardScaleVel = 0;
+  let focusCol = 4, focusRow = 4;
+  let nearestCol = 4, nearestRow = 4;
+  let releaseStartTime = -999999;
+
+  let W = 0, H = 0, gridSide = 0, cell = 0;
+  let restW = 0, restH = 0;
+
+  function updateDimensions() {
+    W = card.clientWidth;
+    H = card.clientHeight;
+    gridSide = W * P.gridFrac;
+    cell = gridSide / 10;
+    restW = P.slatW * gridSide;
+    restH = P.slatH * gridSide;
   }
 
-  function slitLayout(i, peakX, peakY, p) {
-    const col = i % P.cols;
-    const row = (i - col) / P.cols;
-    const [rx, ry] = cellCenter(col, row);
-    const dx = peakX - rx;
-    const dy = peakY - ry;
-    const d = Math.hypot(dx, dy);
-    const off = reduced ? 0 : clamp(dx * P.offsetK, -P.offsetMax, P.offsetMax);
-    const near = Math.pow(P.cell, 1.5) * Math.pow(Math.max(d, 1), -1.5);
-    const grow = 14 + (P.hMax - P.slitH) * clamp(near, 0, 1);
-    const x = rx + off * (1 - p);
-    const y = ry + (0 - ry) * p;
-    const w = P.slitW + (P.pressW - P.slitW) * p;
-    const h = grow + (P.pressH - grow) * p;
-    return { x, y, w, h, d, dx, dy, col, row };
-  }
+  updateDimensions();
 
-  function colorOfSlit(i, layout, p, peakX) {
-    if (i === amberIndex) return COL.amber.slice();
-    const hover = leakColor(layout.d);
-    if (p <= 0) return hover;
-    // The unique amber slit is the only exact #FFB547. Other slits on the
-    // band use the side gradient, nudged off the peak so a strict sample
-    // still counts one amber fill.
-    const band = pressColor(layout.x, peakX);
-    if (nearAmber(band, 8)) {
-      return mix(band, COL.pressSide, 0.18);
-    }
-    return mix(hover, band, p);
-  }
-
-  function draw() {
-    if (!ctx) return;
-    const bw = canvas.width, bh = canvas.height;
-    const p = reduced ? 0 : clamp(press, 0, 1);
-    const peakX = fx;
-    const peakY = fy;
-    amberIndex = pickAmber(peakX, peakY, p);
-    amberCount = 0;
-
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#121214';
-    ctx.fillRect(0, 0, bw, bh);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const snap = (v) => Math.round(v * dpr) / dpr;
-    const ox = W / 2;
-    const oy = H / 2;
-    const r = Math.max(0.5, P.slitR * unit);
-
-    const n = P.cols * P.rows;
-    let glowX = 0, glowY = 0, glowW = 2, glowH = 14;
-    for (let i = 0; i < n; i++) {
-      const layout = slitLayout(i, peakX, peakY, p);
-      const color = colorOfSlit(i, layout, p, peakX);
-      if (nearAmber(color, 8)) amberCount += 1;
-      const w = Math.max(1 / dpr, layout.w * unit);
-      const h = Math.max(1 / dpr, layout.h * unit);
-      const x = ox + layout.x * unit;
-      const y = oy + layout.y * unit;
-      slits[i] = { ...layout, color, cssX: x, cssY: y };
-      if (i === amberIndex) {
-        glowX = x; glowY = y; glowW = w; glowH = h;
-      }
-    }
-
-    // Soft core under the single amber slit, below the fills.
-    {
-      const gx = snap(glowX), gy = snap(glowY);
-      const radius = Math.max(glowW, glowH) * 2.2 + 6 * unit;
-      const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, radius);
-      g.addColorStop(0, 'rgba(255,181,71,0.22)');
-      g.addColorStop(0.6, 'rgba(255,181,71,0.08)');
-      g.addColorStop(1, 'rgba(255,181,71,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(gx, gy, radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    for (let i = 0; i < n; i++) {
-      const s = slits[i];
-      const w = Math.max(1 / dpr, s.w * unit);
-      const h = Math.max(1 / dpr, s.h * unit);
-      const x = snap(ox + s.x * unit - w / 2);
-      const y = snap(oy + s.y * unit - h / 2);
-      ctx.fillStyle = rgbCss(s.color);
-      ctx.beginPath();
-      ctx.roundRect(x, y, snap(x + w) - x, snap(y + h) - y, r);
-      ctx.fill();
-    }
-  }
-
-  function fadeOf(elapsed) {
-    const ms = reduced ? P.reducedFade : P.fadeMs;
-    const u = clamp(elapsed / ms, 0, 1);
-    return reduced ? u : easeFade(u);
-  }
-
-  function publish(elapsed, fade) {
-    if (phase === 'follow') stage.dataset.phase = 'follow';
-    else if (reduced) stage.dataset.phase = 'rest';
-    else if (elapsed < P.guideMs) stage.dataset.phase = 'guide';
-    else stage.dataset.phase = 'drift';
-    if (phase === 'follow') stage.dataset.phase = 'follow';
-    stage.dataset.fx = fx.toFixed(5);
-    stage.dataset.fy = fy.toFixed(5);
-    stage.dataset.press = press.toFixed(4);
-    stage.dataset.pressing = pressing ? '1' : '0';
-    stage.dataset.fade = fade.toFixed(4);
-    stage.dataset.ready = ready ? '1' : '0';
-    stage.dataset.reduced = reduced ? '1' : '0';
-    stage.dataset.elapsed = elapsed.toFixed(2);
-    stage.dataset.dpr = String(dpr);
-    stage.dataset.amber = String(amberIndex);
-    stage.dataset.amberCount = String(amberCount);
-    stage.dataset.returning = returning ? '1' : '0';
-    card.style.opacity = String(fade);
-    if (reduced) card.style.transform = 'none';
-    else card.style.transform = `scale(${scale.toFixed(5)})`;
-    trace.push({ t: elapsed, fx, fy, press, phase, fade, amberIndex, amberCount });
-    if (trace.length > 2400) trace.splice(0, trace.length - 2400);
-  }
-
-  function step(now) {
-    if (frozen) { last = now; return true; }
-    const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
-    last = now;
-    const elapsed = now - t0;
-    const pTarget = (!reduced && pressing) ? 1 : 0;
-    const sTarget = (!reduced && pressing) ? P.pressScale : 1;
-    [press, pv] = spring(press, pv, pTarget, dt, P.pressK, P.pressC, P.pressM);
-    [scale, sv] = spring(scale, sv, sTarget, dt, P.pressK, P.pressC, P.pressM);
-
-    if (reduced) {
-      fx = 0; fy = 0; vx = 0; vy = 0;
-      press = 0; pv = 0;
-      scale = 1; sv = 0;
-      phase = 'rest';
-      return elapsed < P.reducedFade + 40;
-    }
-
-    if (phase === 'follow') {
-      [fx, vx] = spring(fx, vx, targetX, dt, P.followK, P.followC, P.followM);
-      [fy, vy] = spring(fy, vy, targetY, dt, P.followK, P.followC, P.followM);
-      return true;
-    }
-
-    const [tx, ty] = scheduledPos(elapsed);
-    targetX = tx;
-    targetY = ty;
-    phase = elapsed < P.guideMs ? 'guide' : 'drift';
-    if (returning) {
-      [fx, vx] = spring(fx, vx, tx, dt, P.followK, P.followC, P.followM);
-      [fy, vy] = spring(fy, vy, ty, dt, P.followK, P.followC, P.followM);
-      if (Math.hypot(fx - tx, fy - ty) < P.joinEps && Math.hypot(vx, vy) < 8) {
-        fx = tx; fy = ty; vx = 0; vy = 0;
-        returning = false;
-      }
-    } else {
-      fx = tx;
-      fy = ty;
-      vx = 0;
-      vy = 0;
-    }
-    return true;
-  }
-
-  function frame() {
-    raf = 0;
-    if (dead || document.hidden) return;
-    const now = performance.now();
-    const more = step(now);
-    const elapsed = frozen && frozenElapsed != null ? frozenElapsed : now - t0;
-    resize();
-    draw();
-    publish(elapsed, fadeOf(elapsed));
-    if (more) raf = requestAnimationFrame(frame);
-  }
-
-  function kick() {
-    if (!ready || dead || document.hidden) return;
-    if (!raf) raf = requestAnimationFrame(frame);
-  }
-
-  function follow(e) {
-    if (reduced) return;
-    const [x, y] = mapEvent(e);
-    targetX = x;
-    targetY = y;
-    phase = 'follow';
-    returning = false;
-    kick();
-  }
-
-  function onMove(e) {
-    if (reduced || !fineEvent(e)) return;
-    follow(e);
-  }
-
-  function onDown(e) {
-    if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
-    pressing = true;
-    if (!reduced && fineEvent(e)) follow(e);
-    else if (!reduced && e.pointerType === 'touch') follow(e);
-    kick();
-  }
-
-  function onUp() {
-    if (!pressing) return;
-    pressing = false;
-    kick();
-  }
-
-  function onLeave(e) {
-    if (reduced) return;
-    if (e && e.pointerType && !fineEvent(e) && e.pointerType !== 'touch') return;
-    if (phase !== 'follow') return;
-    returning = true;
-    phase = 'drift';
-    kick();
-  }
-
-  card.addEventListener('pointermove', onMove, { signal });
-  card.addEventListener('pointerdown', onDown, { signal });
-  card.addEventListener('pointerleave', onLeave, { signal });
-  window.addEventListener('pointerup', onUp, { signal });
-  window.addEventListener('pointercancel', onUp, { signal });
-  window.addEventListener('resize', () => { if (ready) { resize(); draw(); kick(); } }, { signal });
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && ready) { last = 0; kick(); }
-  }, { signal });
-  reduceMq.addEventListener('change', () => {
-    reduced = reduceMq.matches;
-    if (!ready) return;
-    arm(performance.now());
-    kick();
-  }, { signal });
-
-  const ro = new ResizeObserver(() => {
-    if (!ready) return;
-    resize();
-    draw();
+  const resizeObs = new ResizeObserver(() => {
+    updateDimensions();
   });
-  ro.observe(card);
+  resizeObs.observe(card);
 
-  function shown() {
-    if (dead) return;
-    resize();
-    if (card.getBoundingClientRect().width < 2) {
-      requestAnimationFrame(shown);
-      return;
-    }
-    arm(performance.now());
-    draw();
-    requestAnimationFrame(() => {
-      if (dead) return;
-      const now = performance.now();
-      arm(now);
-      ready = true;
-      stage.dataset.ready = '1';
-      publish(0, fadeOf(0));
-      stage.classList.add('on');
-      kick();
-    });
+  let animFrameId = null;
+  let t0 = 0;
+  let lastTime = 0;
+
+  function updatePointerTarget(clientX, clientY) {
+    const rect = grille.getBoundingClientRect();
+    const gCenterX = rect.left + rect.width / 2;
+    const gCenterY = rect.top + rect.height / 2;
+    pointerTargetX = clientX - gCenterX;
+    pointerTargetY = clientY - gCenterY;
   }
 
-  const fonts = document.fonts && document.fonts.load
-    ? Promise.all([
-        document.fonts.load('600 12px Geist'),
-        document.fonts.load('600 22px Geist')
-      ]).then(() => document.fonts.ready)
-    : Promise.resolve();
-  fonts.then(() => { boot.fontWait = false; shown(); }, () => { boot.fontWait = false; shown(); });
+  const abortCtrl = new AbortController();
+  const { signal } = abortCtrl;
+
+  card.addEventListener('pointerdown', (e) => {
+    if (reduced) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.pointerType !== 'mouse' && e.isPrimary === false) return;
+    {
+      pressing = true;
+      focusCol = nearestCol;
+      focusRow = nearestRow;
+      if (card.setPointerCapture) {
+        try { card.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+      if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
+        finePointer = true;
+        phase = 'follow';
+      }
+      updatePointerTarget(e.clientX, e.clientY);
+    }
+  }, { signal });
+
+  card.addEventListener('pointermove', (e) => {
+    if (reduced) return;
+    if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
+      finePointer = true;
+      phase = 'follow';
+    }
+    if (phase === 'follow' || pressing) {
+      updatePointerTarget(e.clientX, e.clientY);
+    }
+  }, { signal });
+
+  const onPointerRelease = (e) => {
+    if (pressing) {
+      pressing = false;
+      releaseStartTime = performance.now();
+      if (card.releasePointerCapture && e.pointerId !== undefined) {
+        try {
+          if (card.hasPointerCapture(e.pointerId)) {
+            card.releasePointerCapture(e.pointerId);
+          }
+        } catch (_) {}
+      }
+    }
+  };
+
+  card.addEventListener('pointerup', onPointerRelease, { signal });
+  card.addEventListener('pointercancel', onPointerRelease, { signal });
+  card.addEventListener('lostpointercapture', onPointerRelease, { signal });
+
+  const onMediaChange = () => {
+    reduced = mediaReduced.matches;
+    finePointer = mediaFine.matches && !reduced;
+    if (reduced) {
+      phase = 'rest';
+      lx = 0; ly = 0;
+      lxVel = 0; lyVel = 0;
+      pressing = false;
+      cardScale = 1;
+      cardScaleVel = 0;
+      slatS.fill(0);
+      slatSVel.fill(0);
+    } else if (phase === 'rest' && !finePointer) {
+      phase = 'guide';
+    }
+  };
+
+  let mediaLegacy = false;
+  try {
+    mediaReduced.addEventListener('change', onMediaChange, { signal });
+    mediaFine.addEventListener('change', onMediaChange, { signal });
+  } catch (_) {
+    mediaLegacy = true;
+    mediaReduced.addListener(onMediaChange);
+    mediaFine.addListener(onMediaChange);
+  }
+
+  function frame(now) {
+    if (boot.fontWait) {
+      animFrameId = requestAnimationFrame(frame);
+      return;
+    }
+    if (!t0) t0 = now;
+    if (!lastTime) lastTime = now;
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    const elapsedMs = now - t0;
+
+    if (!reduced) {
+      let targetX = 0, targetY = 0;
+      if (phase === 'follow') {
+        targetX = pointerTargetX;
+        targetY = pointerTargetY;
+      } else if (phase === 'rest') {
+        targetX = 0;
+        targetY = 0;
+      } else if (phase === 'guide') {
+        if (elapsedMs < P.guideDelay) {
+          targetX = -P.ampX;
+          targetY = P.ampY;
+        } else if (elapsedMs < P.guideDelay + P.guideMs) {
+          const u = (elapsedMs - P.guideDelay) / P.guideMs;
+          const e = guideBez(clamp(u, 0, 1));
+          targetX = -P.ampX + (P.ampX - (-P.ampX)) * e;
+          targetY = P.ampY + (-P.ampY - P.ampY) * e;
+        } else {
+          phase = 'drift';
+          const tDrift = elapsedMs - (P.guideDelay + P.guideMs);
+          targetX = P.ampX * Math.cos(2 * Math.PI * tDrift / P.driftPeriod);
+          targetY = -P.ampY * Math.cos(2 * Math.PI * tDrift / P.driftPeriod);
+        }
+      } else if (phase === 'drift') {
+        const tDrift = elapsedMs - (P.guideDelay + P.guideMs);
+        targetX = P.ampX * Math.cos(2 * Math.PI * tDrift / P.driftPeriod);
+        targetY = -P.ampY * Math.cos(2 * Math.PI * tDrift / P.driftPeriod);
+      }
+
+      const sX = spring(lx, lxVel, targetX, dt, P.followK, P.followC, P.mass);
+      lx = sX.pos; lxVel = sX.vel;
+      const sY = spring(ly, lyVel, targetY, dt, P.followK, P.followC, P.mass);
+      ly = sY.pos; lyVel = sY.vel;
+
+      const cardTarget = pressing ? P.cardScaleHeld : 1.0;
+      const cardK = pressing ? P.holdK : P.releaseK;
+      const cardC = pressing ? P.holdC : P.releaseC;
+      const sCard = spring(cardScale, cardScaleVel, cardTarget, dt, cardK, cardC, P.mass);
+      cardScale = sCard.pos;
+      cardScaleVel = sCard.vel;
+    } else {
+      lx = 0; ly = 0;
+      cardScale = 1.0;
+    }
+
+    let minDist = Infinity;
+    let nCol = 0, nRow = 0;
+    for (let r = 0; r < P.rows; r++) {
+      for (let c = 0; c < P.cols; c++) {
+        const sx = (c + 0.5 - 5) * cell;
+        const sy = (r + 0.5 - 5) * cell;
+        const dist = Math.hypot(sx - lx, sy - ly);
+        if (dist < minDist) {
+          minDist = dist;
+          nCol = c;
+          nRow = r;
+        }
+      }
+    }
+    nearestCol = nCol;
+    nearestRow = nRow;
+
+    if (!pressing && now > releaseStartTime + 10 * P.releaseStagger + 500) {
+      focusCol = nearestCol;
+      focusRow = nearestRow;
+    }
+
+    const fadeDuration = reduced ? P.reducedFade : P.cardFade;
+    const cardOpacity = Math.min(1, elapsedMs / fadeDuration);
+    card.style.opacity = cardOpacity.toFixed(4);
+    card.style.transform = `scale(${cardScale.toFixed(4)})`;
+
+    for (let r = 0; r < P.rows; r++) {
+      for (let c = 0; c < P.cols; c++) {
+        const idx = r * P.cols + c;
+        let targetS, kS, cS;
+        let holdSpring = true;
+        if (pressing) {
+          targetS = 1;
+          kS = P.holdK;
+          cS = P.holdC;
+        } else {
+          const ring = Math.max(Math.abs(c - focusCol), Math.abs(r - focusRow));
+          const delayMs = releaseStartTime + ring * P.releaseStagger;
+          if (now < delayMs) {
+            holdSpring = false;
+          } else {
+            targetS = 0;
+            kS = P.releaseK;
+            cS = P.releaseC;
+          }
+        }
+
+        let sVal = 0;
+        if (!reduced) {
+          if (holdSpring) {
+            const sRes = spring(slatS[idx], slatSVel[idx], targetS, dt, kS, cS, P.mass);
+            slatS[idx] = sRes.pos;
+            slatSVel[idx] = sRes.vel;
+          }
+          sVal = clamp(slatS[idx], 0, 1);
+        }
+
+        let grow = 1;
+        if (!reduced) {
+          const distCenter = Math.hypot(c - 4.5, r - 4.5);
+          const startMs = distCenter * P.growStagger;
+          const slatElapsed = elapsedMs - startMs;
+          if (slatElapsed <= 0) grow = 0;
+          else if (slatElapsed >= P.growMs) grow = 1;
+          else grow = growBez(slatElapsed / P.growMs);
+        }
+
+        const sx = (c + 0.5 - 5) * cell;
+        const sy = (r + 0.5 - 5) * cell;
+        const dx = sx - lx;
+        const dy = sy - ly;
+        const d = Math.hypot(dx, dy);
+
+        const scaleH = Math.min(P.heightMax, 1 + 0.35 * (1 / (1 + (d / (P.charRadiusFrac * gridSide)) ** 2)));
+        const hoverHeight = restH * scaleH;
+        const hoverRot = clamp(-P.rotMax, dx * P.rotGain, P.rotMax);
+
+        const isFocus = (c === focusCol && r === focusRow);
+        let rot, h, w, fill;
+
+        if (isFocus) {
+          rot = hoverRot * (1 - sVal);
+          h = hoverHeight * (1 - sVal) + (restH * P.holdHeight) * sVal;
+          w = restW * ((1 - sVal) + P.holdWidth * sVal);
+          const mult = 1 + (P.holdBright - 1) * sVal;
+          const rCol = clamp(Math.round(255 * mult), 0, 255);
+          const gCol = clamp(Math.round(181 * mult), 0, 255);
+          const bCol = clamp(Math.round(71 * mult), 0, 255);
+          fill = `rgb(${rCol},${gCol},${bCol})`;
+        } else {
+          rot = hoverRot * (1 - sVal) + P.closeRot * sVal;
+          h = hoverHeight * (1 - sVal) + restH * sVal;
+          w = restW;
+          const tFall = clamp((cell * cell) / (d * d + 1), 0, 1);
+          const rCol = Math.round(255 - 23 * tFall);
+          const gCol = Math.round(255 - 25 * tFall);
+          const bCol = Math.round(255 - 30 * tFall);
+          const aCol = 0.05 + 0.17 * tFall;
+          fill = `rgba(${rCol},${gCol},${bCol},${aCol.toFixed(4)})`;
+        }
+
+        if (reduced) {
+          rot = 0;
+          h = restH;
+          w = restW;
+          grow = 1;
+          if (c === 4 && r === 4) {
+            fill = P.amber;
+          } else {
+            fill = P.slatBase;
+          }
+        }
+
+        const finalH = h * grow;
+        const cx = (c + 0.5) * cell;
+        const cy = (r + 0.5) * cell;
+
+        const el = slatElements[idx];
+        el.style.left = `${cx.toFixed(2)}px`;
+        el.style.top = `${cy.toFixed(2)}px`;
+        el.style.width = `${w.toFixed(2)}px`;
+        el.style.height = `${finalH.toFixed(2)}px`;
+        el.style.transform = `translate(-50%, -50%) rotateY(${rot.toFixed(2)}deg)`;
+        el.style.background = fill;
+      }
+    }
+
+    if (!ready) {
+      stage.classList.add('on');
+      ready = true;
+    }
+
+    animFrameId = requestAnimationFrame(frame);
+  }
+
+  let fontReadySettled = false;
+  const fontTimeout = setTimeout(() => {
+    if (!fontReadySettled) {
+      fontReadySettled = true;
+      boot.fontWait = false;
+    }
+  }, 3000);
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      if (!fontReadySettled) {
+        fontReadySettled = true;
+        clearTimeout(fontTimeout);
+        boot.fontWait = false;
+      }
+    });
+  } else {
+    clearTimeout(fontTimeout);
+    fontReadySettled = true;
+    boot.fontWait = false;
+  }
+
+  animFrameId = requestAnimationFrame(frame);
+
+  function destroy() {
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+    abortCtrl.abort();
+    if (mediaLegacy) {
+      mediaReduced.removeListener(onMediaChange);
+      mediaFine.removeListener(onMediaChange);
+    }
+    resizeObs.disconnect();
+    stage.remove();
+    dropStyles();
+  }
 
   function state() {
-    const elapsed = !ready ? 0 : (frozen && frozenElapsed != null ? frozenElapsed : performance.now() - t0);
     return {
-      phase: stage.dataset.phase, fx, fy, vx, vy, press, pv, pressing,
-      scale, reduced, ready, elapsed, fade: fadeOf(elapsed),
-      dpr, W, H, unit, amberIndex, amberCount, returning,
-      targetX, targetY,
-      cardW: card.getBoundingClientRect().width,
-      cardH: card.getBoundingClientRect().height,
-      scheduled: scheduledPos(elapsed)
+      ready,
+      phase,
+      fine: finePointer,
+      reduced,
+      pressing,
+      lx,
+      ly,
+      elapsed: t0 ? performance.now() - t0 : 0,
+      cardScale,
+      focusCol,
+      focusRow,
+      nearestCol,
+      nearestRow,
+      W,
+      H,
+      gridSide
     };
   }
 
-  function sample(cssX, cssY) {
-    const x = clamp(Math.round(cssX * dpr), 0, canvas.width - 1);
-    const y = clamp(Math.round(cssY * dpr), 0, canvas.height - 1);
-    const px = ctx.getImageData(x, y, 1, 1).data;
-    return [px[0], px[1], px[2], px[3]];
-  }
-
-  function destroy() {
-    if (dead) return;
-    dead = true;
-    ready = false;
-    cancelAnimationFrame(raf);
-    ac.abort();
-    ro.disconnect();
-    stage.remove();
-    alive -= 1;
-    if (alive <= 0) {
-      alive = 0;
-      if (styleEl) { styleEl.remove(); styleEl = null; }
-    }
-  }
-
-  let frozen = false;
-  let frozenElapsed = null;
-
-  function force(opts = {}) {
-    if (opts.reduced != null) reduced = !!opts.reduced;
-    if (opts.freeze != null) frozen = !!opts.freeze;
-    if (opts.elapsed != null) {
-      t0 = performance.now() - opts.elapsed;
-      if (frozen) frozenElapsed = opts.elapsed;
-    }
-    if (opts.freeze === false) frozenElapsed = null;
-    if (opts.pressing != null) pressing = !!opts.pressing;
-    if (opts.press != null) { press = opts.press; pv = 0; }
-    if (opts.scale != null) { scale = opts.scale; sv = 0; }
-    if (opts.focus) {
-      fx = opts.focus[0];
-      fy = opts.focus[1];
-      targetX = fx;
-      targetY = fy;
-      vx = 0;
-      vy = 0;
-      returning = false;
-      phase = opts.phase || 'follow';
-    } else if (opts.useScheduled) {
-      const el = opts.elapsed != null ? opts.elapsed : (ready ? performance.now() - t0 : 0);
-      const pos = scheduledPos(el);
-      fx = pos[0];
-      fy = pos[1];
-      targetX = fx;
-      targetY = fy;
-      vx = 0;
-      vy = 0;
-      returning = false;
-      phase = el < P.guideMs ? 'guide' : 'drift';
-    } else if (opts.phase) {
-      phase = opts.phase;
-    }
-    if (!ready) return state();
-    resize();
-    draw();
-    const elapsed = performance.now() - t0;
-    publish(elapsed, fadeOf(elapsed));
-    return state();
-  }
-
-  return {
-    destroy, state, sample, force, boot, stage, card, canvas, slits,
-    scheduledPos, leakColor, guidePos, P, trace
-  };
-}
-
-export function mounts() {
-  return alive;
+  return { destroy, state, boot, stage, card };
 }

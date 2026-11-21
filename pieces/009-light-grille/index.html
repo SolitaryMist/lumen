@@ -1,44 +1,83 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Light Grille — Lumen 009</title>
-<meta property="og:title" content="Light Grille — Lumen 009">
-<meta property="og:description" content="Light leaks through dynamic physical aperture grids. Motion study by @aldininin.">
-<meta property="og:image" content="https://lumen-motion.vercel.app/009-light-grille/og.png">
-<meta property="og:type" content="website">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://lumen-motion.vercel.app/009-light-grille/og.png">
-<meta name="description" content="Light leaks through dynamic physical aperture grids. Motion study by @aldininin.">
-<link rel="preload" href="geist.woff2" as="font" type="font/woff2" crossorigin>
-<style>
-@font-face{font-family:Geist;src:url(geist.woff2) format("woff2");font-weight:600;font-display:block}
-html,body{height:100%;background:#0B0B0C;color:#E8E6E1}
-body{margin:0;overflow:hidden;font-family:Geist,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-a{color:inherit;text-decoration:none}
-.links{position:fixed;top:20px;right:24px;z-index:5;display:flex;gap:16px;font-size:12px;line-height:1;font-weight:600}
-.links a{color:#8A8A8A}
-.links a:hover,.links a:focus-visible{color:#E8E6E1}
-.links a:focus-visible{outline:1px solid #8A8A8A;outline-offset:4px}
-#app{position:relative;height:100%}
-@media (max-width:760px){.links{right:16px;top:16px}}
-body.og .links{display:none}
-</style>
+  <meta charset="utf-8">
+  <title>Light Grille — Lumen 009</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Light through a fine grille. Motion study by @aldininin.">
+  <meta property="og:title" content="Light Grille — Lumen 009">
+  <meta property="og:description" content="Light through a fine grille. Motion study by @aldininin.">
+  <meta property="og:image" content="https://lumen-motion.vercel.app/009-light-grille/og.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://lumen-motion.vercel.app/009-light-grille/og.png">
+  <link rel="preload" href="geist-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <style>
+    @font-face {
+      font-family: "Geist";
+      src: url("geist-sans.woff2") format("woff2");
+      font-weight: 100 900;
+      font-display: block;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #0B0B0C;
+      color: #E8E6E1;
+      overflow: hidden;
+      font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    #app {
+      position: relative;
+      height: 100%;
+    }
+    body.og .links { display: none; }
+    .links {
+      position: fixed;
+      top: 20px;
+      right: 24px;
+      z-index: 5;
+      font-size: 12px;
+      display: flex;
+      gap: 16px;
+    }
+    @media (max-width: 760px) {
+      .links {
+        top: 16px;
+        right: 16px;
+        gap: 12px;
+      }
+    }
+    .links a {
+      color: #8A8A8A;
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+    .links a:hover,
+    .links a:focus {
+      color: #E8E6E1;
+    }
+    .links a:focus-visible {
+      outline: 1px solid #8A8A8A;
+      outline-offset: 4px;
+    }
+  </style>
 </head>
 <body>
-<nav class="links" aria-label="Links">
-  <a href="https://github.com/SolitaryMist/lumen" target="_blank" rel="noopener">GitHub</a>
-  <a href="https://x.com/aldininin" target="_blank" rel="noopener">@aldininin</a>
-</nav>
-<div id="app"></div>
-<script type="module">
-import { mountLightGrille } from './light-grille.js';
-if (new URLSearchParams(location.search).has('og')) document.body.classList.add('og');
-const handle = mountLightGrille(document.getElementById('app'));
-window.__lightGrille = handle;
-window.__boot = handle.boot;
-</script>
-<script defer src="/_vercel/insights/script.js"></script>
+  <nav class="links" aria-label="Links">
+    <a href="https://github.com/SolitaryMist/lumen" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://x.com/aldininin" target="_blank" rel="noopener">@aldininin</a>
+  </nav>
+  <div id="app"></div>
+  <script type="module">
+    import { mountLightGrille } from './light-grille.js';
+    if (new URLSearchParams(location.search).has('og')) document.body.classList.add('og');
+    const handle = mountLightGrille(document.getElementById('app'));
+    window.__lightGrille = handle;
+    window.__boot = handle.boot;
+  </script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

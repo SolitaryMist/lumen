@@ -1,13 +1,31 @@
 # Light Grille — Jetpack Compose
 
-This folder holds implementation notes only. There is no Kotlin source in this piece.
+A Jetpack Compose implementation of Lumen Piece 009, "Light Grille".
 
-Draw every slit in one `Canvas(Modifier.fillMaxSize())` with `drawRoundRect`. Drive the focus with `Animatable` so a change in the light point does not recompose the whole tree. Put Geist at weight 600 in `res/font` and the piece's `grain.png` at `res/drawable/grain.png`, shown static at 3% opacity.
+> **Source only:** This file was not compiled, and it was not run on a device.
 
-- Card 360×480 (aspect 3/4, width `min(360dp, 86% of the view)`), face `#121214`, 1dp stroke at 6% white, corner radius 20. Page `#0B0B0C`.
-- Grid 240×240, centred, 12×12 cells of 20. Each slit starts 2×14, corner radius 1. Base fill `rgba(255,255,255,0.04)`.
-- Labels: `LUMEN` 12sp / 0.08em / `#55545D` top left; `Nº 009` 12sp / 0.04em / `#55545D` top right; `Light Grille` 22sp / −0.03em / `#E8E6E1` bottom left. One weight only.
-- Hover: height 14→18 by distance; `offsetX = clamp(-4, dx*0.05, 4)`; one nearest slit `#FFB547`; others fall with `d^-1.5` toward the leak, `#55545D`, and the base. Spring stiffness 240, damping 22.
-- Press: card scale 0.98. All slits go to 16×2 and gather on the horizontal mid-line, forming one band. Midpoint `#FFB547`, sides `rgba(255,181,71,0.15)`. Spring 380 / 26.
-- No fine pointer: 480ms reverse arc from (−60, 40) into (60, −40), opacity 0→1 in the first 160ms (`CubicBezierEasing(0f, 0f, 0.2f, 1f)`). Then `pos(t) = (60·cos(2πt/8000), −40·cos(2πt/8000))` from that same clock, joined at (60, −40) with velocity 0. Leaving the pointer returns to this path.
-- Animator duration scale 0, or a reduced-motion preference: focus stays at the origin, the centre slit holds `#FFB547`, and there is no drift, press scale, or offset.
+## Integration & Assets
+
+1. Add `LightGrille.kt` to your project package `lumen.lightgrille`.
+2. (Optional) Place the Geist font at `res/font/geist_regular.ttf`. If omitted, standard `FontFamily.SansSerif` will be used as a fallback.
+3. (Optional) Place `grain.png` at `res/drawable/grain.png` (128.dp tileable grain). If omitted, the background container operates cleanly without grain tiling.
+
+## Key Numerical Parameters
+
+- **Card Aspect Ratio**: 3:4 aspect ratio, width `min(420.dp, 86% of container)`, corner radius `20.dp`, border `1.dp` at `rgba(255,255,255,0.06)`.
+- **Louvre Grille**: 10×10 grid centered in card, side = 66% of card width. Rest slat width = 2.8% grid side, rest slat height = 5.0% grid side, corner radius `1.dp`.
+- **Hover Physics**:
+  - Light follow spring: Stiffness $k = 260$, damping $c = 24$, mass $m = 1$.
+  - Height scaling: $1 + 0.35 \times \frac{1}{1 + (d / 0.22S)^2}$, capped at $1.35$.
+  - Y Rotation projection: $\text{clamp}(-25^\circ, dx \times 0.3^\circ, 25^\circ)$.
+- **Hold & Release Interaction**:
+  - Press-and-hold compresses card scale to 0.98.
+  - Nearest focus slat stays at 0° Y rotation, scales height by 150%, width by 80%, and brightens to amber.
+  - The remaining 99 slats flip closed to +75° Y using hold spring ($k = 420$, $c = 28$).
+  - Release reopens slats using release spring ($k = 300$, $c = 20$) staggered by Chebyshev distance $r \times 18\text{ms}$.
+- **Intro & Motion**:
+  - Card opacity linear fade: 160ms.
+  - Slat grow animation: 600ms cubic bezier $(0.16, 1.0, 0.3, 1.0)$ with radial delay $12\text{ms} \times \text{hypot}(c - 4.5, r - 4.5)$.
+  - Automated guide path: starts at 760ms, duration 520ms from $(-50, +35)$ to $(+50, -35)$ in grid coordinates.
+  - Drift motion: $50 \cos(2\pi t / 8000), -35 \cos(2\pi t / 8000)$ after 1280ms.
+- **Reduced Motion**: If system animator duration scale is 0, static 200ms fade is rendered with light static at $(0,0)$ and slat (4,4) fixed amber without interactive physics or drift.
