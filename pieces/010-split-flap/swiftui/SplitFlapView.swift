@@ -301,7 +301,7 @@ struct FlapSize {
 
 struct BoardGeo {
     let big: FlapSize, small: FlapSize
-    let rowGap, boardW, boardH, left, top: CGFloat
+    let rowGap, labelH, rowsTop, boardW, boardH, left, top: CGFloat
 
     init(size: CGSize, scale: CGFloat) {
         let even: (CGFloat) -> CGFloat = { (($0 * scale) / 2).rounded() * 2 / scale }
@@ -319,8 +319,11 @@ struct BoardGeo {
         big = flap(w)
         small = flap(SF.smallR * w)
         rowGap = even(SF.rowGapR * w)
+        labelH = even(12)
+        // one block: label line, gap, big row, gap, number row
+        rowsTop = labelH + rowGap
         boardW = CGFloat(SF.cols) * big.w + CGFloat(SF.cols - 1) * big.gap
-        boardH = big.h + rowGap + small.h
+        boardH = rowsTop + big.h + rowGap + small.h
         let cy = size.height > size.width ? SF.portraitCenter : 0.5
         left = even((size.width - boardW) / 2)
         top = even(cy * size.height - boardH / 2)
@@ -354,7 +357,7 @@ public struct SplitFlapView: View {
             .onContinuousHover(coordinateSpace: .local) { phase in
                 // Fires for an iPad or Mac pointer only.
                 guard case .active(let p) = phase else { model.lastHoverCol = -1; return }
-                let x = p.x - geo.left, y = p.y - geo.top
+                let x = p.x - geo.left, y = p.y - geo.top - geo.rowsTop
                 guard y >= 0, y <= geo.big.h else { model.lastHoverCol = -1; return }
                 let col = Int(floor(x / (geo.big.w + geo.big.gap)))
                 let inside = x >= 0 && x - CGFloat(col) * (geo.big.w + geo.big.gap) <= geo.big.w
@@ -376,14 +379,14 @@ public struct SplitFlapView: View {
                 .font(.custom("JetBrainsMono-Regular", size: 12))
                 .foregroundStyle(SF.dim)
                 .fixedSize()
-                .offset(y: -geo.rowGap - 12)
+                .frame(height: geo.labelH, alignment: .leading)
             ForEach(0..<SF.cols, id: \.self) { i in
                 FlapCellView(frame: model.frame(model.letters[i]), size: geo.big, scale: scale)
-                    .offset(x: CGFloat(i) * (geo.big.w + geo.big.gap))
+                    .offset(x: CGFloat(i) * (geo.big.w + geo.big.gap), y: geo.rowsTop)
             }
             ForEach(0..<3, id: \.self) { i in
                 FlapCellView(frame: model.frame(model.nums[i]), size: geo.small, scale: scale)
-                    .offset(x: CGFloat(i) * (geo.small.w + geo.small.gap), y: geo.big.h + geo.rowGap)
+                    .offset(x: CGFloat(i) * (geo.small.w + geo.small.gap), y: geo.rowsTop + geo.big.h + geo.rowGap)
             }
         }
     }

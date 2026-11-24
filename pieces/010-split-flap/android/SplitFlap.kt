@@ -19,6 +19,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
@@ -29,6 +31,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -316,8 +319,11 @@ class BoardGeo(widthPx: Float, heightPx: Float, density: Float) {
     val big = flap(wDp * density)
     val small = flap(SF.smallR * wDp * density)
     val rowGap = even(SF.rowGapR * wDp * density)
+    val labelH = even(12f * density)
+    // one block: label line, gap, big row, gap, number row
+    val rowsTop = labelH + rowGap
     val boardW = SF.cols * big.w + (SF.cols - 1) * big.gap
-    val boardH = big.h + rowGap + small.h
+    val boardH = rowsTop + big.h + rowGap + small.h
     val left = even((widthPx - boardW) / 2)
     val top = even((if (heightPx > widthPx) SF.portraitCenter else 0.5f) * heightPx - boardH / 2)
 }
@@ -377,7 +383,7 @@ fun SplitFlap(modifier: Modifier = Modifier) {
                                 PointerEventType.Move, PointerEventType.Enter -> {
                                     if (ch.type != PointerType.Mouse) continue
                                     val x = ch.position.x - geo.left
-                                    val y = ch.position.y - geo.top
+                                    val y = ch.position.y - geo.top - geo.rowsTop
                                     val pitch = geo.big.w + geo.big.gap
                                     val col = floor(x / pitch).toInt()
                                     val inside = y in 0f..geo.big.h && x >= 0 && x - col * pitch <= geo.big.w
@@ -396,15 +402,15 @@ fun SplitFlap(modifier: Modifier = Modifier) {
                 Text(
                     SF.label,
                     style = TextStyle(fontFamily = mono, fontWeight = FontWeight.Normal, fontSize = 12.sp, color = SF.dim, letterSpacing = 0.sp),
-                    modifier = Modifier.offset { IntOffset(0, -(geo.rowGap + 12 * density.density).roundToInt()) }
+                    modifier = Modifier.height(with(density) { geo.labelH.toDp() }).wrapContentHeight(Alignment.CenterVertically)
                 )
                 model.letters.forEachIndexed { i, cell ->
                     FlapCellView(model.frame(cell), geo.big, geist, grainBrush,
-                        Modifier.offset { IntOffset((i * (geo.big.w + geo.big.gap)).roundToInt(), 0) })
+                        Modifier.offset { IntOffset((i * (geo.big.w + geo.big.gap)).roundToInt(), geo.rowsTop.roundToInt()) })
                 }
                 model.nums.forEachIndexed { i, cell ->
                     FlapCellView(model.frame(cell), geo.small, geist, grainBrush,
-                        Modifier.offset { IntOffset((i * (geo.small.w + geo.small.gap)).roundToInt(), (geo.big.h + geo.rowGap).roundToInt()) })
+                        Modifier.offset { IntOffset((i * (geo.small.w + geo.small.gap)).roundToInt(), (geo.rowsTop + geo.big.h + geo.rowGap).roundToInt()) })
                 }
             }
         }

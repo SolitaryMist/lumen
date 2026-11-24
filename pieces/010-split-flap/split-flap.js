@@ -251,18 +251,28 @@ export function mountSplitFlap(root, opts = {}) {
       r: evCss(P.radiusR * sw), f: evCss(P.fontR * sw)
     };
     const rowGap = evCss(P.rowGapR * w);
+    const labelH = evCss(P.labelSize);
     const boardW = P.cols * big.w + (P.cols - 1) * big.gap;
-    const boardH = big.h + rowGap + small.h;
+    // the block is one unit: label line, gap, big row, gap, number row
+    const rowsTop = labelH + rowGap;
+    const boardH = rowsTop + big.h + rowGap + small.h;
     const cy = H > W ? P.portraitCenter : 0.5;
-    const left = even((W * dpr - boardW) / 2);
-    const top = even(cy * H * dpr - boardH / 2);
-    geo = { dpr, big, small, rowGap, boardW, boardH, left, top, W, H };
+    geo = { dpr, big, small, rowGap, labelH, boardW, boardH, cy, W, H };
 
     const px = (d) => `${d / dpr}px`;
-    board.style.left = px(left);
-    board.style.top = px(top);
+    // Centered by CSS against the stage itself, so a stale size can never pin
+    // it to a corner; then nudged so its origin lands on an even device px.
     board.style.width = px(boardW);
     board.style.height = px(boardH);
+    board.style.left = '50%';
+    board.style.top = `${cy * 100}%`;
+    board.style.transform = `translate(${px(-boardW / 2)}, ${px(-boardH / 2)})`;
+    const r = board.getBoundingClientRect();
+    const snap = (v) => (Math.round((v * dpr) / 2) * 2 - v * dpr) / dpr;
+    const sx = snap(r.left), sy = snap(r.top);
+    board.style.transform = `translate(${-boardW / 2 / dpr + sx}px, ${-boardH / 2 / dpr + sy}px)`;
+    const rr = board.getBoundingClientRect();
+    geo.left = rr.left; geo.top = rr.top;
 
     const place = (cell, s, x, y) => {
       const n = cell.node.style;
@@ -289,10 +299,11 @@ export function mountSplitFlap(root, opts = {}) {
       const shift = (0.855 - P.capHalf - 0.5) * s.f; // = 0 for Geist
       if (shift) for (const part of [cell.sTop, cell.fTop, cell.sBot, cell.fBot]) part.g.style.transform = part.g2.style.transform = `translateY(${px(shift)})`;
     };
-    letters.forEach((c, i) => place(c, big, i * (big.w + big.gap), 0));
-    nums.forEach((c, i) => place(c, small, i * (small.w + small.gap), big.h + rowGap));
+    letters.forEach((c, i) => place(c, big, i * (big.w + big.gap), rowsTop));
+    nums.forEach((c, i) => place(c, small, i * (small.w + small.gap), rowsTop + big.h + rowGap));
     label.style.left = '0px';
-    label.style.top = px(-rowGap - evCss(P.labelSize));
+    label.style.top = '0px';
+    label.style.height = label.style.lineHeight = px(labelH);
   }
 
   // ---------- scheduling ----------
@@ -478,6 +489,15 @@ export function mountSplitFlap(root, opts = {}) {
   listen(fineQ, onFine);
   const ro = new ResizeObserver(() => layout());
   ro.observe(root);
+  const onWin = () => layout();
+  window.addEventListener('resize', onWin);
+  let dprQ = null;
+  const onDpr = () => { if (dprQ) unlisten(dprQ, onDpr); watchDpr(); layout(); };
+  function watchDpr() {
+    dprQ = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    listen(dprQ, onDpr);
+  }
+  watchDpr();
   layout();
 
   const fontsReady = (opts.fonts || Promise.all([
@@ -509,6 +529,8 @@ export function mountSplitFlap(root, opts = {}) {
       unlisten(reducedQ, onReduced);
       unlisten(fineQ, onFine);
       ro.disconnect();
+      window.removeEventListener('resize', onWin);
+      if (dprQ) unlisten(dprQ, onDpr);
       stage.remove();
       removeStyles();
     }
