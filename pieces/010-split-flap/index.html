@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Split Flap — Lumen 010</title>
+  <meta name="description" content="Every letter falls into place. Motion study by @aldininin.">
+
+  <meta property="og:title" content="Split Flap — Lumen 010">
+  <meta property="og:description" content="Every letter falls into place. Motion study by @aldininin.">
+  <meta property="og:image" content="https://lumen-motion.vercel.app/010-split-flap/og.png">
+  <meta property="og:type" content="website">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Split Flap — Lumen 010">
+  <meta name="twitter:description" content="Every letter falls into place. Motion study by @aldininin.">
+  <meta name="twitter:image" content="https://lumen-motion.vercel.app/010-split-flap/og.png">
+
+  <link rel="preload" href="geist-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
+
+  <style>
+    @font-face {
+      font-family: "Geist";
+      src: url("geist-sans.woff2") format("woff2");
+      font-weight: 100 900;
+      font-display: block;
+    }
+    @font-face {
+      font-family: "JetBrains Mono";
+      src: url("jetbrains-mono.woff2") format("woff2");
+      font-weight: 400;
+      font-display: block;
+    }
+    html, body {
+      height: 100%;
+      background: #0B0B0C;
+      color: #E8E6E1;
+      margin: 0;
+      overflow: hidden;
+      font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    #app {
+      position: relative;
+      height: 100%;
+    }
+    .links {
+      position: fixed;
+      top: 20px;
+      right: 24px;
+      z-index: 5;
+      font-size: 12px;
+      display: flex;
+      gap: 16px;
+    }
+    @media (max-width: 760px) {
+      .links {
+        top: 16px;
+        right: 16px;
+      }
+    }
+    .links a {
+      color: #8A8A8A;
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+    .links a:hover,
+    .links a:focus {
+      color: #E8E6E1;
+    }
+    .links a:focus-visible {
+      outline: 1px solid #8A8A8A;
+      outline-offset: 4px;
+    }
+    body.og .links {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <nav class="links" aria-label="Links">
+    <a href="https://github.com/SolitaryMist/lumen" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://x.com/aldininin" target="_blank" rel="noopener">@aldininin</a>
+  </nav>
+
+  <main id="app"></main>
+
+  <script type="module">
+    import { mountSplitFlap } from './split-flap.js';
+    const og = new URLSearchParams(location.search).has('og');
+    if (og) document.body.classList.add('og');
+    window.__splitFlap = mountSplitFlap(document.getElementById('app'), { og });
+  </script>
+
+  <script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
