@@ -77,7 +77,6 @@ object PF {
     val paper = Color(0xFFECE8E1)
     val ink = Color(0xFF1A1A1C)
     val small = Color(0xFF8A8780)
-    val amber = Color(0xFFFFB547)
 
     const val wMax = 720f; const val wVw = 0.72f; const val wVh = 1.28f
     const val portraitVw = 0.86f; const val portraitCy = 0.46f
@@ -92,7 +91,6 @@ object PF {
     const val leftShade = 0.10f; const val rightShade = 0.42f
     const val valleyDp = 24f; const val valleyAlpha = 0.18f
     const val peakAlpha = 0.5f
-    const val amberDp = 2f; const val amberLo = 0.15; const val amberHi = 0.6
     const val shadowW = 0.9f; const val shadowBlurDp = 24f; const val shadowYDp = 18f
     const val shadowA0 = 0.18f; const val shadowA1 = 0.22f; const val shadowH = 0.14f
 
@@ -126,7 +124,6 @@ class Bezier(private val x1: Double, private val y1: Double, private val x2: Dou
     }
 }
 
-private fun smoothstep(a: Double, b: Double, x: Double): Double { val t = ((x - a) / (b - a)).coerceIn(0.0, 1.0); return t * t * (3 - 2 * t) }
 private fun driftF(ms: Double) = PF.driftMid - PF.driftAmp * cos(2 * PI * ms / PF.driftMs)
 private fun driftV(ms: Double) = PF.driftAmp * sin(2 * PI * ms / PF.driftMs) * 2 * PI / PF.driftMs * 1000
 
@@ -346,13 +343,10 @@ fun PaperFold(modifier: Modifier = Modifier) {
                         PanelSlice(i, W, H, f.toFloat(), facesRight, geist, mono, grainBrush)
                     }
                 }
-                // peak: 1px highlight, then the 2dp amber line (snapped to even px), opacity only
-                val amberW = ((PF.amberDp * dens) / 2).roundToInt() * 2f
+                // centre peak: the same 1px white highlight as a normal peak line
                 Canvas(Modifier.size(wDp, hDp)) {
                     val top = H / 2 - H * sp / 2
                     drawRect(Color.White.copy(alpha = PF.peakAlpha * f.toFloat()), Offset(W / 2 - 0.5f, top), Size(1f, H * sp))
-                    drawRect(PF.amber.copy(alpha = smoothstep(PF.amberLo, PF.amberHi, f).toFloat()),
-                        Offset(W / 2 - amberW / 2, top), Size(amberW, H * sp))
                 }
             }
         }

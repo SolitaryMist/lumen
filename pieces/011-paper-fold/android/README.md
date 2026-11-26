@@ -14,7 +14,7 @@ Source only: not compiled, not run on a device.
 
 ## How it maps to the web piece
 
-- Same numbers as `paper-fold.js`: panel angle f·72°, facing shade ×(1−0.10f) / ×(1−0.42f), valley shadow 24dp at 0.18f, 1px peak highlight at 0.5f, 2dp amber peak line with opacity smoothstep(0.15, 0.6, f).
+- Same numbers as `paper-fold.js`: panel angle f·72°, facing shade ×(1−0.10f) / ×(1−0.42f), valley shadow 24dp at 0.18f, 1px peak highlight at 0.5f.
 - Each panel uses `graphicsLayer { rotationY; transformOrigin }` on its valley crease edge with `cameraDistance = 1400 * density`. Panel x comes from f so the joins meet, and the card is scaled so its projected width is W·cosθ.
 - Shadow: blurred ellipse on API 31+, radial-gradient ellipse below that.
 - At launch a connected mouse or trackpad means rest at f = 0.45 waiting for hover; hover switches to pointer mode. Otherwise the guide (0.45 → 0.85 → 0.2) runs, then the 8s drift; a horizontal drag drives f and springs back to the drift.

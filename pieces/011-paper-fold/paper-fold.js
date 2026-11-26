@@ -7,7 +7,6 @@ export const P = {
   paper: '#ECE8E1',
   ink: '#1A1A1C',
   small: '#8A8780',
-  amber: '#FFB547',
 
   // layout
   wMax: 720, wVw: 0.72, wVh: 1.28,     // landscape: W = min(720px, 72vw, 128vh)
@@ -28,7 +27,6 @@ export const P = {
   rightShade: 0.42,
   valleyPx: 24, valleyAlpha: 0.18,
   peakAlpha: 0.5,
-  amberPx: 2, amberLo: 0.15, amberHi: 0.6,
   shadowW: 0.9, shadowBlur: 24, shadowY: 18, shadowA0: 0.18, shadowA1: 0.22, shadowH: 0.14,
 
   // states
@@ -76,7 +74,6 @@ export function spring(pos, vel, target, dt, k, c, m = 1) {
 }
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const introEase = bez(...P.introEase);
 const guideEase = bez(...P.guideEase);
 
@@ -169,8 +166,6 @@ export function mountPaperFold(root, opts = {}) {
   }
   const peak = div('pf-line', stage);
   peak.style.background = `rgba(255,255,255,${P.peakAlpha})`;
-  const amberLine = div('pf-line', stage);
-  amberLine.style.background = P.amber;
 
   const reducedQ = window.matchMedia('(prefers-reduced-motion: reduce)');
   const fineQ = window.matchMedia('(hover: hover) and (pointer: fine)');
@@ -230,21 +225,17 @@ export function mountPaperFold(root, opts = {}) {
     });
     shadow.style.width = px(W);
     shadow.style.height = px(P.shadowH * H);
-    // amber and peak lines live in stage space, outside the 3D context
+    // the 1px peak highlight lives in stage space, outside the 3D context
     const cxDev = Math.round((r.left - sr.left + W / 2) * dpr);
-    const amberDev = Math.round(P.amberPx * dpr);
-    const amberLeftDev = Math.round((cxDev - amberDev / 2) / 2) * 2;
     const peakDev = Math.max(1, Math.round(dpr));
     const peakLeftDev = Math.round(cxDev - peakDev / 2);
-    amberLine.style.width = px(amberDev / dpr);
-    amberLine.style.height = px(H);
     peak.style.width = px(peakDev / dpr);
     peak.style.height = px(H);
     geo = {
       dpr, W, H, p, portrait, cy,
       cardLeft: r.left - sr.left, cardTop: r.top - sr.top,
       cx: cxDev / dpr, cyPx: r.top - sr.top + H / 2,
-      amberLeft: amberLeftDev / dpr, peakLeft: peakLeftDev / dpr
+      peakLeft: peakLeftDev / dpr
     };
     return true;
   }
@@ -336,10 +327,7 @@ export function mountPaperFold(root, opts = {}) {
     const proj = (y) => { const yy = y * Math.cos(a), zz = y * Math.sin(a); return (yy * P.perspective) / (P.perspective - zz); };
     const top = cyPx + proj(-H / 2), bottom = cyPx + proj(H / 2);
     const k = (bottom - top) / H;
-    amberLine.style.transform = `translate(${geo.amberLeft}px, ${fmt(top)}px) scaleY(${fmt(k)})`;
     peak.style.transform = `translate(${geo.peakLeft}px, ${fmt(top)}px) scaleY(${fmt(k)})`;
-    const amberA = smoothstep(P.amberLo, P.amberHi, ff);
-    amberLine.style.opacity = fmt(amberA);
     peak.style.opacity = fmt(ff);
   }
 
@@ -458,7 +446,7 @@ export function mountPaperFold(root, opts = {}) {
     state() {
       return {
         started: t0 !== null, now, f, vf, rx, mode, introDone, pointerMode, reduced,
-        amber: smoothstep(P.amberLo, P.amberHi, clamp(f, 0, 1)), geo, driftStart
+        geo, driftStart
       };
     },
     destroy() {

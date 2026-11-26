@@ -16,7 +16,6 @@ enum PF {
     static let paper = Color(hex: 0xECE8E1)
     static let ink = Color(hex: 0x1A1A1C)
     static let small = Color(hex: 0x8A8780)
-    static let amber = Color(hex: 0xFFB547)
 
     static let wMax: CGFloat = 720, wVw: CGFloat = 0.72, wVh: CGFloat = 1.28
     static let portraitVw: CGFloat = 0.86, portraitCy: CGFloat = 0.46
@@ -31,7 +30,6 @@ enum PF {
     static let leftShade = 0.10, rightShade = 0.42
     static let valleyPx: CGFloat = 24, valleyAlpha = 0.18
     static let peakAlpha = 0.5
-    static let amberPx: CGFloat = 2, amberLo = 0.15, amberHi = 0.6
     static let shadowW: CGFloat = 0.9, shadowBlur: CGFloat = 24, shadowY: CGFloat = 18
     static let shadowA0 = 0.18, shadowA1 = 0.22, shadowH: CGFloat = 0.14
 
@@ -73,11 +71,6 @@ struct Bezier {
         }
         return cy(t)
     }
-}
-
-func smoothstep(_ a: Double, _ b: Double, _ x: Double) -> Double {
-    let t = min(1, max(0, (x - a) / (b - a)))
-    return t * t * (3 - 2 * t)
 }
 
 func springStep(_ pos: inout Double, _ vel: inout Double, to target: Double, dt: Double, k: Double, c: Double) {
@@ -309,13 +302,10 @@ struct FoldedCard: View {
                                           perspective: persp)
                         .offset(x: facesRight ? pivotX - p / 2 : pivotX + p / 2)
                 }
-                // peak: 1px highlight, then the 2px amber line on top (opacity only)
+                // centre peak: the same 1px white highlight as a normal peak line
                 Rectangle().fill(Color.white.opacity(PF.peakAlpha))
                     .frame(width: max(1, (scale).rounded()) / scale, height: H * sp)
                     .opacity(f)
-                Rectangle().fill(PF.amber)
-                    .frame(width: even(PF.amberPx), height: H * sp)
-                    .opacity(smoothstep(PF.amberLo, PF.amberHi, f))
             }
             .scaleEffect(k)
             .rotation3DEffect(.degrees(rx), axis: (1, 0, 0), perspective: max(W, H) / PF.perspective)
