@@ -18,12 +18,12 @@ const P = {
   noiseAmp: 0.06, noiseK1: 6, noiseK2: 13, noiseW1: 0.8, noiseW2: 0.2, noiseS1: 0.18, noiseS2: 0.42,
   noiseNorm: 0.497, // measured: makes the curl-noise RMS speed equal noiseAmp
   // render
-  absorbK: 2.2, poolK: 0.18, poolBlur: 2, fiberBase: 0.92, fiberAmp: 0.16, fiberScale: 24, maxDensity: 0.92,
+  absorbK: 3.0, poolK: 0.18, poolBlur: 2, fiberBase: 0.92, fiberAmp: 0.16, fiberScale: 24, maxDensity: 0.92,
   // paper absorption (wet ink soaking into the fibers, which then stays put)
   soakRate: 0.15, soakFiber: 0.15, soakStill: 0.1, crisp: 2.5,
   // drops
   dropAmount: 1.0, dropPeak: 0.85, dropR: 0.075, dropIn: 180, dropImpulse: 0.2, burstR: 0.028,
-  satellites: 3, satAmount: 0.85, dropGap: 350,
+  dropGap: 350,
   // pointer stirring
   moveGain: 1.4, moveR: 0.035, moveMax: 3.0,
   // auto mode
@@ -614,7 +614,7 @@ export function mountInk(root, opts = {}) {
     gl.uniform1f(u.uSeed, s || 0);
     draw(ink.write); ink.swap();
   }
-  // a drop: radial burst that the projection turns into curling lobes, a soft core and three satellites.
+  // a drop: radial burst that the projection turns into curling lobes, and a soft core.
   // The ink does not land in one frame: each splat is fed in over dropIn ms with an ease-out.
   const pours = [];            // {x, y, r, amount, s, t} pending ink, t = ms poured so far
   const easeOut = (k) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
@@ -633,12 +633,6 @@ export function mountInk(root, opts = {}) {
     splatVel(x, y, 0, 0, P.burstR, 0, P.dropImpulse, s);
     const peak = P.dropPeak * P.dropAmount;
     pours.push({ x, y, r: R, amount: peak, s, t: 0 });
-    for (let i = 0; i < P.satellites; i++) {
-      const a = rand() * Math.PI * 2;
-      const dist = R * (1.7 + rand() * 1.5);
-      const sx = x + Math.cos(a) * dist, sy = y + Math.sin(a) * dist * aspectU;
-      pours.push({ x: sx, y: sy, r: R * (0.26 + rand() * 0.2), amount: peak * P.satAmount, s: s + i * 7.1, t: 0 });
-    }
     bursts.unshift({ x, y: y / aspectU, age: 0 });
     if (bursts.length > 4) bursts.length = 4;
     lastDropT = simT;
