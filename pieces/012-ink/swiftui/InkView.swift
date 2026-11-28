@@ -28,6 +28,8 @@ enum InkP {
     static let gridCPU = (96, 64), inkCPU = (192, 128), jacobiCPU = 16
     static let pressureWarm: Float = 0.8, vorticity: Float = 18
     static let velHalfLife: Float = 1200, inkHalfLife: Float = 9000
+    /// Ink half-life while no pointer is involved; pointer play uses inkHalfLife. Eased between the two (half-time hlEase).
+    static let inkHalfLifeAuto: Float = 3500, hlEase: Float = 250
     static let edgeMargin: Float = 0.06
     static let noiseAmp: Float = 0.06, noiseK = SIMD2<Float>(6, 13), noiseW = SIMD2<Float>(0.8, 0.2)
     static let noiseS = SIMD2<Float>(0.18, 0.42), noiseNorm: Float = 0.497
@@ -41,11 +43,13 @@ enum InkP {
     // pointer stirring
     static let moveGain: Float = 1.4, moveR: Float = 0.035, moveMax: Float = 3.0
     // auto mode
-    static let autoEvery: Double = 5200
+    static let autoEvery: Double = 9000
     static let autoPts: [SIMD2<Float>] = [[0.50, 0.47], [0.62, 0.56], [0.50, 0.40]]
     static let stirAx: Float = 0.22, stirAy: Float = 0.14, stirPeriod: Float = 7000, stirForce: Float = 0.7, stirR: Float = 0.035
     static let stirIn: Double = 800, stirOut: Double = 300, idleFine: Double = 6000, idleCoarse: Double = 3000
     static let resumeDropDelay: Double = 800
+    /// Auto stirrer: full force for stirHold ms after a drop, then a smoothstep down to 0 over stirFade ms.
+    static let stirHold: Double = 3500, stirFade: Double = 1200
     // start
     static let prerun: Double = 600, stepMs: Double = 1000 / 60, maxDt: Double = 1000 / 30
     static let slowMs: Double = 20, slowRun = 30
@@ -107,8 +111,8 @@ protocol InkBackend: AnyObject {
     func splatVel(x: Float, y: Float, fx: Float, fy: Float, r: Float, blend: Float, radial: Float, seed: Float)
     /// Add ink with the profile amount·(1 − q²)², q = distance / (r · low-order wobble).
     func splatInk(x: Float, y: Float, r: Float, amount: Float, seed: Float)
-    /// Advance the fluid and the ink by dt ms. `bursts` are (x, y in W units, radius, amplitude).
-    func simulate(dtMs: Float, simT: Float, bursts: [SIMD4<Float>])
+    /// Advance the fluid and the ink by dt ms. `bursts` are (x, y in W units, radius, amplitude); `inkHalfLife` is the current ink half-life in ms.
+    func simulate(dtMs: Float, simT: Float, bursts: [SIMD4<Float>], inkHalfLife: Float)
     func clear()
 }
 
@@ -119,6 +123,8 @@ final class InkDirector {
     let seed: UInt32
     private var mode: Mode = .auto
     private var lastDropT: Double = -1e9, nextAutoT: Double = 0, autoIdx = 0
+    private var autoT0: Double = 0                  // time of the last auto drop (or of the return to auto)
+    private var inkHL: Float = InkP.inkHalfLifeAuto // current ink half-life, eased between the auto and the pointer value
     private var lastInputT: Double = -1e9, lastInputCoarse = false
     private var stirFrom: Float = 0, stirTo: Float = 0, stirT0: Double = 0, stirDur: Double = 1
     private var queue: [SIMD2<Float>] = []
@@ -141,7 +147,7 @@ final class InkDirector {
         rand = Mulberry32(seed)
         noiseSeed = [rand.next() * 100, rand.next() * 100]
         mode = .auto; lastDropT = -1e9; lastInputT = -1e9; queue.removeAll(); pours.removeAll(); bursts.removeAll()
-        ptr = Ptr(); autoIdx = 0; nextAutoT = 0; simT = 0
+        ptr = Ptr(); autoIdx = 0; nextAutoT = 0; autoT0 = 0; inkHL = InkP.inkHalfLifeAuto; simT = 0
         backend?.clear()
         prerun(reduced: reduced)
     }
@@ -176,7 +182,7 @@ final class InkDirector {
         while !queue.isEmpty { let q = queue.removeFirst(); drop(q.x, q.y) }
         if mode == .auto && simT >= nextAutoT {
             let p = InkP.autoPts[autoIdx % InkP.autoPts.count]
-            drop(p.x, p.y); autoIdx += 1; nextAutoT = simT + InkP.autoEvery
+            drop(p.x, p.y); autoT0 = simT; autoIdx += 1; nextAutoT = simT + InkP.autoEvery
         }
         // each drop is poured in over 180 ms with an ease-out, never in one frame
         var i = pours.count - 1
@@ -187,7 +193,10 @@ final class InkDirector {
             if pours[i].t >= InkP.dropIn { pours.remove(at: i) }
             i -= 1
         }
-        let gain = currentStir()
+        // auto stirrer: full force for stirHold ms after the drop, then a smoothstep down to 0 over stirFade ms
+        let autoF = 1 - smooth01(Float((simT - autoT0 - InkP.stirHold) / InkP.stirFade))
+        let gain = currentStir() * autoF
+        inkHL += ((mode == .auto ? InkP.inkHalfLifeAuto : InkP.inkHalfLife) - inkHL) * (1 - pow(0.5, dt / InkP.hlEase))
         if gain > 0.001 {
             let w = 2 * Float.pi / InkP.stirPeriod, t = Float(simT)
             let sx = 0.5 + InkP.stirAx * sin(w * t), sy = 0.5 + InkP.stirAy * sin(2 * w * t)
@@ -209,12 +218,12 @@ final class InkDirector {
             let amp = InkP.dropImpulse * pow(0.5, br.age / InkP.velHalfLife)
             if amp >= 0.004 { b.append([br.x, br.y, InkP.burstR, amp]) }
         }
-        backend?.simulate(dtMs: dt, simT: Float(simT), bursts: b)
+        backend?.simulate(dtMs: dt, simT: Float(simT), bursts: b, inkHalfLife: inkHL)
         for k in bursts.indices { bursts[k].age += dt }
         bursts.removeAll { InkP.dropImpulse * pow(0.5, $0.age / InkP.velHalfLife) < 0.004 }
         simT += dtMs
         if mode == .manual && simT - lastInputT > (lastInputCoarse ? InkP.idleCoarse : InkP.idleFine) {
-            mode = .auto; setStir(1, InkP.stirIn); nextAutoT = simT + InkP.resumeDropDelay
+            mode = .auto; setStir(1, InkP.stirIn); autoT0 = simT; nextAutoT = simT + InkP.resumeDropDelay
         }
     }
 
@@ -640,7 +649,7 @@ final class InkMetal: NSObject, InkBackend, MTKViewDelegate {
         u.point = [x, y]; u.radius = r; u.amount = amount; u.seed = seed
         run("splatInk", [ink.read], ink.write); ink.swap()
     }
-    func simulate(dtMs: Float, simT: Float, bursts: [SIMD4<Float>]) {
+    func simulate(dtMs: Float, simT: Float, bursts: [SIMD4<Float>], inkHalfLife: Float) {
         u.dt = dtMs / 1000
         run("curl", [vel.read], curlT)
         run("vorticity", [vel.read, curlT], vel.write); vel.swap()
@@ -659,7 +668,7 @@ final class InkMetal: NSObject, InkBackend, MTKViewDelegate {
         u.burst = (b[0], b[1], b[2], b[3])
         run("vink", [vel.read, psiT], vinkT)
         run("inkFwd", [ink.read, vinkT], fwdT)
-        u.decay = pow(0.5, dtMs / InkP.inkHalfLife)
+        u.decay = pow(0.5, dtMs / inkHalfLife)
         run("inkFix", [ink.read, fwdT, vinkT, fiberT], ink.write); ink.swap()
     }
 
@@ -819,7 +828,7 @@ final class InkCPU: InkBackend {
         noiseNorm = rms > 0 ? InkP.noiseAmp / rms : 0
     }
 
-    func simulate(dtMs: Float, simT: Float, bursts: [SIMD4<Float>]) {
+    func simulate(dtMs: Float, simT: Float, bursts: [SIMD4<Float>], inkHalfLife: Float) {
         let dt = dtMs / 1000, h = 1 / Float(gw), invH = Float(gw)
         // vorticity confinement
         for j in 0..<gh { for i in 0..<gw {
@@ -889,7 +898,7 @@ final class InkCPU: InkBackend {
             let (sx, sy) = tr(x, y, 1)
             fwd[j * iw + i] = samp(wet, iw, ih, sx, sy)
         } }
-        let idc = pow(0.5, dtMs / InkP.inkHalfLife)
+        let idc = pow(0.5, dtMs / inkHalfLife)
         for j in 0..<ih { for i in 0..<iw {
             let id = j * iw + i
             let x = (Float(i) + 0.5) / Float(iw), y = (Float(j) + 0.5) / Float(ih)

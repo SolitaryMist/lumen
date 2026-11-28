@@ -91,6 +91,8 @@ object InkP {
     const val GW = 96; const val GH = 64; const val IW = 192; const val IH = 128; const val jacobi = 16
     const val pressureWarm = 0.8f; const val vorticity = 18f
     const val velHalfLife = 1200f; const val inkHalfLife = 9000f
+    // ink half-life while no pointer is involved; pointer play uses inkHalfLife. Eased between the two (half-time hlEase)
+    const val inkHalfLifeAuto = 3500f; const val hlEase = 250f
     const val edgeMargin = 0.06f
     const val noiseAmp = 0.06f; const val noiseK1 = 6f; const val noiseK2 = 13f
     const val noiseW1 = 0.8f; const val noiseW2 = 0.2f; const val noiseS1 = 0.18f; const val noiseS2 = 0.42f
@@ -104,11 +106,13 @@ object InkP {
     // pointer stirring
     const val moveGain = 1.4f; const val moveR = 0.035f; const val moveMax = 3.0f
     // auto mode
-    const val autoEvery = 5200.0
+    const val autoEvery = 9000.0
     val autoPts = arrayOf(floatArrayOf(0.50f, 0.47f), floatArrayOf(0.62f, 0.56f), floatArrayOf(0.50f, 0.40f))
     const val stirAx = 0.22f; const val stirAy = 0.14f; const val stirPeriod = 7000f; const val stirForce = 0.7f; const val stirR = 0.035f
     const val stirIn = 800.0; const val stirOut = 300.0; const val idleFine = 6000.0; const val idleCoarse = 3000.0
     const val resumeDropDelay = 800.0
+    // auto stirrer: full force for stirHold ms after a drop, then a smoothstep down to 0 over stirFade ms
+    const val stirHold = 3500.0; const val stirFade = 1200.0
     // start
     const val prerun = 600.0; const val stepMs = 1000.0 / 60; const val maxDt = 1000.0 / 30
 }
@@ -178,6 +182,8 @@ class InkSim(private val seed: Int) {
     private var noiseSeed = floatArrayOf(0f, 0f)
     private var auto = true
     private var lastDropT = -1e9; private var nextAutoT = 0.0; private var autoIdx = 0
+    private var autoT0 = 0.0                       // time of the last auto drop (or of the return to auto)
+    private var inkHL = InkP.inkHalfLifeAuto      // current ink half-life, eased between the auto and the pointer value
     private var lastInputT = -1e9; private var lastInputCoarse = false
     private var stirFrom = 0f; private var stirTo = 0f; private var stirT0 = 0.0; private var stirDur = 1.0
     private val queue = ArrayDeque<FloatArray>()
@@ -197,7 +203,7 @@ class InkSim(private val seed: Int) {
         noiseSeed = floatArrayOf(rand.next() * 100, rand.next() * 100)
         u.fill(0f); v.fill(0f); p.fill(0f); wet.fill(0f); dry.fill(0f)
         auto = true; lastDropT = -1e9; lastInputT = -1e9; queue.clear(); pours.clear(); bursts.clear()
-        moved = false; inside = false; down = false; autoIdx = 0; nextAutoT = 0.0; simT = 0.0
+        moved = false; inside = false; down = false; autoIdx = 0; nextAutoT = 0.0; autoT0 = 0.0; inkHL = InkP.inkHalfLifeAuto; simT = 0.0
         // the first visible frame is a drop that has just burst: run the first 0.6 s offscreen
         repeat((InkP.prerun / InkP.stepMs).roundToInt()) { step(InkP.stepMs) }
         stirFrom = 0f; stirTo = if (reduced) 0f else 1f; stirT0 = simT; stirDur = InkP.stirIn
@@ -225,7 +231,7 @@ class InkSim(private val seed: Int) {
         while (queue.isNotEmpty()) { val q = queue.removeFirst(); drop(q[0], q[1]) }
         if (auto && simT >= nextAutoT) {
             val pnt = InkP.autoPts[autoIdx % InkP.autoPts.size]
-            drop(pnt[0], pnt[1]); autoIdx++; nextAutoT = simT + InkP.autoEvery
+            drop(pnt[0], pnt[1]); autoT0 = simT; autoIdx++; nextAutoT = simT + InkP.autoEvery
         }
         // each drop is poured in over 180 ms with an ease-out, never in one frame
         val iter = pours.iterator()
@@ -236,7 +242,10 @@ class InkSim(private val seed: Int) {
             q.t += dt
             if (q.t >= InkP.dropIn) iter.remove()
         }
-        val gain = currentStir()
+        // auto stirrer: full force for stirHold ms after the drop, then a smoothstep down to 0 over stirFade ms
+        val autoF = 1f - smooth01(((simT - autoT0 - InkP.stirHold) / InkP.stirFade).toFloat())
+        val gain = currentStir() * autoF
+        inkHL += ((if (auto) InkP.inkHalfLifeAuto else InkP.inkHalfLife) - inkHL) * (1f - 0.5f.pow(dt / InkP.hlEase))
         if (gain > 0.001f) {
             val w = (2 * PI / InkP.stirPeriod).toFloat(); val t = simT.toFloat()
             val sx = 0.5f + InkP.stirAx * sin(w * t); val sy = 0.5f + InkP.stirAy * sin(2 * w * t)
@@ -258,7 +267,7 @@ class InkSim(private val seed: Int) {
         bursts.removeAll { InkP.dropImpulse * 0.5f.pow(it.age / InkP.velHalfLife) < 0.004f }
         simT += dtMs
         if (!auto && simT - lastInputT > (if (lastInputCoarse) InkP.idleCoarse else InkP.idleFine)) {
-            auto = true; setStir(1f, InkP.stirIn); nextAutoT = simT + InkP.resumeDropDelay
+            auto = true; setStir(1f, InkP.stirIn); autoT0 = simT; nextAutoT = simT + InkP.resumeDropDelay
         }
     }
 
@@ -430,7 +439,7 @@ class InkSim(private val seed: Int) {
             tr((i + 0.5f) / iw, (j + 0.5f) / ih, 1f)
             fwd[j * iw + i] = samp(wet, iw, ih, out[0], out[1])
         }
-        val idc = 0.5f.pow(dtMs / InkP.inkHalfLife)
+        val idc = 0.5f.pow(dtMs / inkHL)
         for (j in 0 until ih) for (i in 0 until iw) {
             val id = j * iw + i
             val x = (i + 0.5f) / iw; val y = (j + 0.5f) / ih

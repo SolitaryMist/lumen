@@ -15,6 +15,7 @@ const P = {
   gridLong: 256, inkScale: 0.5, inkMax: 1024,
   jacobi: 24, pressureWarm: 0.8, vorticity: 18,
   velHalfLife: 1200, inkHalfLife: 9000, edgeMargin: 0.06,
+  inkHalfLifeAuto: 3500, // ink half-life while no pointer is involved; pointer play uses inkHalfLife
   noiseAmp: 0.06, noiseK1: 6, noiseK2: 13, noiseW1: 0.8, noiseW2: 0.2, noiseS1: 0.18, noiseS2: 0.42,
   noiseNorm: 0.497, // measured: makes the curl-noise RMS speed equal noiseAmp
   // render
@@ -27,8 +28,9 @@ const P = {
   // pointer stirring
   moveGain: 1.4, moveR: 0.035, moveMax: 3.0,
   // auto mode
-  autoEvery: 5200, autoPts: [[0.50, 0.47], [0.62, 0.56], [0.50, 0.40]],
+  autoEvery: 9000, autoPts: [[0.50, 0.47], [0.62, 0.56], [0.50, 0.40]],
   stirAx: 0.22, stirAy: 0.14, stirPeriod: 7000, stirForce: 0.7, stirR: 0.035,
+  stirHold: 3500, stirFade: 1200, hlEase: 250, // auto stirrer: full force for stirHold ms after a drop, then smoothstep to 0
   stirIn: 800, stirOut: 300, idleFine: 6000, idleCoarse: 3000, resumeDropDelay: 800,
   // start
   prerun: 600, recDt: 1000 / 60, maxDt: 1000 / 30,
@@ -591,7 +593,8 @@ export function mountInk(root, opts = {}) {
   let mode = 'auto';           // auto | manual
   let stirGain = 0;            // 0..1, eased
   let stirFrom = 0, stirTo = 0, stirT0 = 0, stirDur = 1;
-  let autoIdx = 0, nextAutoT = 0;
+  let autoIdx = 0, nextAutoT = 0, autoT0 = 0; // autoT0: time of the last auto drop (or of the return to auto)
+  let inkHL = P.inkHalfLifeAuto; // current ink half-life, eased between the auto and the pointer value
   let lastInputT = -1e9, lastInputCoarse = false;
   const ptr = { x: 0.5, y: 0.5, px: 0.5, py: 0.5, t: 0, pt: 0, moved: false, inside: false, down: false };
   const queue = [];            // pending drops [x, y] (card uv, y down)
@@ -664,11 +667,15 @@ export function mountInk(root, opts = {}) {
     if (mode === 'auto' && simT >= nextAutoT) {
       const p = P.autoPts[autoIdx % P.autoPts.length];
       drop(p[0], p[1]);
+      autoT0 = simT;
       autoIdx++;
       nextAutoT = simT + P.autoEvery;
     }
     pour(dtMs);
-    stirGain = currentStir();
+    // auto stirrer: full force for stirHold ms after the drop, then a smoothstep down to 0 over stirFade ms
+    const autoF = 1 - smooth((simT - autoT0 - P.stirHold) / P.stirFade);
+    stirGain = currentStir() * autoF;
+    inkHL += ((mode === 'auto' ? P.inkHalfLifeAuto : P.inkHalfLife) - inkHL) * (1 - Math.pow(0.5, dtMs / P.hlEase));
     if (stirGain > 0.001) {
       const w = (2 * Math.PI) / P.stirPeriod;
       const sx = 0.5 + P.stirAx * Math.sin(w * simT), sy = 0.5 + P.stirAy * Math.sin(2 * w * simT);
@@ -756,7 +763,7 @@ export function mountInk(root, opts = {}) {
     u = use('inkFix');
     bindTex(u, u.uInk, ink.read); bindTex(u, u.uFwd, fwdT); bindTex(u, u.uFiber, fiberTex); inkCommon(u);
     gl.uniform2f(u.uInkTx, 1 / iw, 1 / ih); gl.uniform2f(u.uInkSize, iw, ih);
-    gl.uniform1f(u.uDecay, Math.pow(0.5, dtMs / P.inkHalfLife));
+    gl.uniform1f(u.uDecay, Math.pow(0.5, dtMs / inkHL));
     gl.uniform1f(u.uSoak, P.soakRate); gl.uniform1f(u.uSoakFiber, P.soakFiber);
     gl.uniform1f(u.uSoakV, P.soakStill);
     draw(ink.write); ink.swap();
@@ -770,6 +777,7 @@ export function mountInk(root, opts = {}) {
     if (mode === 'manual' && simT - lastInputT > (lastInputCoarse ? P.idleCoarse : P.idleFine)) {
       mode = 'auto';
       setStir(1, P.stirIn);
+      autoT0 = simT;
       nextAutoT = simT + P.resumeDropDelay;
     }
   }
@@ -793,7 +801,7 @@ export function mountInk(root, opts = {}) {
 
   // the first visible frame is a drop that has just burst: run the first 0.6 s offscreen
   function prerun() {
-    simT = 0; frame = 0; bursts.length = 0; pours.length = 0; autoIdx = 0; nextAutoT = 0;
+    simT = 0; frame = 0; bursts.length = 0; pours.length = 0; autoIdx = 0; nextAutoT = 0; autoT0 = 0; inkHL = P.inkHalfLifeAuto;
     const n = Math.round(P.prerun / P.recDt);
     for (let i = 0; i < n; i++) step(P.recDt);
     // stirrer eases in from the first visible frame
@@ -909,7 +917,7 @@ export function mountInk(root, opts = {}) {
     if (rec) return;
     reduced = reducedQ.matches;
     if (reduced) { stop(); if (ok) { prerun(); render(); } }
-    else { setStir(1, P.stirIn); start(); }
+    else { autoT0 = simT; setStir(1, P.stirIn); start(); }
   };
   reducedQ.addEventListener('change', onReduced);
   const onLost = (e) => { e.preventDefault(); stop(); };
@@ -932,7 +940,7 @@ export function mountInk(root, opts = {}) {
     state() {
       const s = times.slice().sort((a, b) => a - b);
       return {
-        mode, frame, simT, stirGain, perfLevel, reduced, rec, seed,
+        mode, frame, simT, stirGain, inkHL, perfLevel, reduced, rec, seed,
         grid: [gw, gh], ink: [iw, ih], canvas: [canvas.width, canvas.height],
         geo, fineQ: fineQ.matches,
         frameMs: s.length ? { avg: s.reduce((a, b) => a + b, 0) / s.length, p50: s[s.length >> 1], p95: s[Math.floor(s.length * 0.95)], n: s.length } : null
