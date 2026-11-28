@@ -14,7 +14,7 @@ const P = {
   // simulation
   gridLong: 256, inkScale: 0.5, inkMax: 1024,
   jacobi: 24, pressureWarm: 0.8, vorticity: 18,
-  velHalfLife: 1200, inkHalfLife: 9000,
+  velHalfLife: 1200, inkHalfLife: 9000, edgeMargin: 0.06,
   noiseAmp: 0.06, noiseK1: 6, noiseK2: 13, noiseW1: 0.8, noiseW2: 0.2, noiseS1: 0.18, noiseS2: 0.42,
   noiseNorm: 0.497, // measured: makes the curl-noise RMS speed equal noiseAmp
   // render
@@ -150,6 +150,12 @@ void main(){
 
   advectVel: HEAD + `
 uniform sampler2D uVel; uniform float uDt; uniform float uAspect; uniform float uDecay; uniform vec2 uTx;
+uniform float uEdge;
+// soft margin: velocity fades to 0 within uEdge (card widths) of every card edge, so ink stays on the paper
+float edgeFade(vec2 uv, float aspect, float m){
+  float dx = min(uv.x, 1.0 - uv.x), dy = min(uv.y, 1.0 - uv.y) / aspect;
+  return smoothstep(0.0, m, dx) * smoothstep(0.0, m, dy);
+}
 void main(){
   vec2 v = texture(uVel, vUv).xy;
   vec2 c = vUv - uDt * vec2(v.x, v.y * uAspect);
@@ -157,6 +163,7 @@ void main(){
   // walls: no flow through the card edge
   if (vUv.x < uTx.x || vUv.x > 1.0 - uTx.x) nv.x = 0.0;
   if (vUv.y < uTx.y || vUv.y > 1.0 - uTx.y) nv.y = 0.0;
+  nv *= edgeFade(vUv, uAspect, uEdge);
   o = vec4(nv, 0.0, 1.0);
 }`,
 
@@ -220,7 +227,12 @@ void main(){
 // rgb = grid velocity + curl noise + drop bursts (W/s), burst divergence; a = |grid velocity|
 FS.vink = HEAD + `
 uniform sampler2D uVel; uniform sampler2D uPsi; uniform vec2 uPsiTx; uniform float uAspect;
-uniform vec4 uBurst[4]; uniform int uBurstN;
+uniform vec4 uBurst[4]; uniform int uBurstN; uniform float uEdge;
+// soft margin: velocity fades to 0 within uEdge (card widths) of every card edge, so ink stays on the paper
+float edgeFade(vec2 uv, float aspect, float m){
+  float dx = min(uv.x, 1.0 - uv.x), dy = min(uv.y, 1.0 - uv.y) / aspect;
+  return smoothstep(0.0, m, dx) * smoothstep(0.0, m, dy);
+}
 void main(){
   float L = texture(uPsi, vUv - vec2(uPsiTx.x, 0.0)).x;
   float R = texture(uPsi, vUv + vec2(uPsiTx.x, 0.0)).x;
@@ -243,7 +255,8 @@ void main(){
     acc.z += 2.0 * b.w / b.z * e;
   }
   vec2 g = texture(uVel, vUv).xy;
-  o = vec4(g + noise + acc.xy, acc.z, length(g));
+  // the ink's full transport (grid + noise + bursts) also fades out at the margin
+  o = vec4((g + noise + acc.xy) * edgeFade(vUv, uAspect, uEdge), acc.z, length(g));
 }`;
 
 const TRACE = `
@@ -705,7 +718,7 @@ export function mountInk(root, opts = {}) {
     u = use('advectVel');
     bindTex(u, u.uVel, vel.read);
     gl.uniform1f(u.uDt, dt); gl.uniform1f(u.uAspect, aspectU); gl.uniform2f(u.uTx, tx[0], tx[1]);
-    gl.uniform1f(u.uDecay, Math.pow(0.5, dtMs / P.velHalfLife));
+    gl.uniform1f(u.uDecay, Math.pow(0.5, dtMs / P.velHalfLife)); gl.uniform1f(u.uEdge, P.edgeMargin);
     draw(vel.write); vel.swap();
 
     mark('velocity');
@@ -729,7 +742,7 @@ export function mountInk(root, opts = {}) {
     u = use('vink');
     bindTex(u, u.uVel, vel.read); bindTex(u, u.uPsi, psiT);
     gl.uniform2f(u.uPsiTx, 1 / pw, 1 / ph); gl.uniform1f(u.uAspect, aspectU);
-    gl.uniform4fv(u.uBurst, bdata); gl.uniform1i(u.uBurstN, bn);
+    gl.uniform4fv(u.uBurst, bdata); gl.uniform1i(u.uBurstN, bn); gl.uniform1f(u.uEdge, P.edgeMargin);
     draw(vinkT);
     mark('vink');
     const inkCommon = (u) => {
