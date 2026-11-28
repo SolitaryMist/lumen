@@ -15,23 +15,23 @@ const P = {
   gridLong: 256, inkScale: 0.5, inkMax: 1024,
   jacobi: 24, pressureWarm: 0.8, vorticity: 18,
   velHalfLife: 1200, inkHalfLife: 9000,
-  noiseAmp: 0.06, noiseK1: 12, noiseK2: 26, noiseW1: 0.8, noiseW2: 0.2, noiseS1: 0.18, noiseS2: 0.42,
-  noiseNorm: 0.524, // measured: makes the curl-noise RMS speed equal noiseAmp
+  noiseAmp: 0.06, noiseK1: 6, noiseK2: 13, noiseW1: 0.8, noiseW2: 0.2, noiseS1: 0.18, noiseS2: 0.42,
+  noiseNorm: 0.497, // measured: makes the curl-noise RMS speed equal noiseAmp
   // render
-  absorbK: 2.2, poolK: 0.35, fiberBase: 0.85, fiberAmp: 0.3, maxDensity: 0.92,
+  absorbK: 2.2, poolK: 0.18, poolBlur: 2, fiberBase: 0.92, fiberAmp: 0.16, fiberScale: 24, maxDensity: 0.92,
   // paper absorption (wet ink soaking into the fibers, which then stays put)
-  soakRate: 0.15, soakFiber: 0.15, soakStill: 0.1, feather: 0.7, featherReach: 9.0, crisp: 2.5,
+  soakRate: 0.15, soakFiber: 0.15, soakStill: 0.1, crisp: 2.5,
   // drops
-  dropAmount: 1.0, dropR: 0.022, dropImpulse: 0.6, burstR: 0.028, burstDilute: 0.01,
+  dropAmount: 1.0, dropPeak: 0.85, dropR: 0.075, dropIn: 180, dropImpulse: 0.2, burstR: 0.028,
   satellites: 3, satAmount: 0.85, dropGap: 350,
   // pointer stirring
-  moveGain: 1.0, moveR: 0.035, moveMax: 3.0,
+  moveGain: 1.4, moveR: 0.035, moveMax: 3.0,
   // auto mode
-  autoEvery: 5200, autoPts: [[0.38, 0.44], [0.62, 0.56], [0.50, 0.40]],
-  stirAx: 0.22, stirAy: 0.14, stirPeriod: 7000, stirForce: 0.5, stirR: 0.035,
+  autoEvery: 5200, autoPts: [[0.50, 0.47], [0.62, 0.56], [0.50, 0.40]],
+  stirAx: 0.22, stirAy: 0.14, stirPeriod: 7000, stirForce: 0.7, stirR: 0.035,
   stirIn: 800, stirOut: 300, idleFine: 6000, idleCoarse: 3000, resumeDropDelay: 800,
   // start
-  prerun: 350, recDt: 1000 / 60, maxDt: 1000 / 30,
+  prerun: 600, recDt: 1000 / 60, maxDt: 1000 / 30,
   // perf fallback
   slowMs: 20, slowRun: 30
 };
@@ -60,14 +60,15 @@ void main(){
   v = mix(v, uForce, g * uBlend);
   if (uRadial > 0.0) {
     float r = length(d), a = atan(d.y, d.x);
-    float wob = 1.0 + 0.2 * sin(a * 5.0 + uSeed) + 0.17 * sin(a * 8.0 + uSeed * 2.31) + 0.14 * sin(a * 13.0 + uSeed * 4.7) + 0.11 * sin(a * 21.0 + uSeed * 6.13) + 0.08 * sin(a * 34.0 + uSeed * 9.4);
+    // low orders only: a few long lobes rather than many short jets
+    float wob = 1.0 + 0.2 * sin(a * 5.0 + uSeed) + 0.17 * sin(a * 8.0 + uSeed * 2.31);
     float q = r / uRadius;
     v += d / max(r, 1e-5) * uRadial * q * exp(0.5 * (1.0 - q * q)) * wob;
   }
   o = vec4(v, 0.0, 1.0);
 }`,
 
-  // a drop: dense disk with a slightly ragged rim
+  // a drop: d = peak (1 - r^2)^2 from the centre out (tonal layers, no flat fill), slightly ragged rim
   splatInk: HEAD + `
 uniform sampler2D uInk; uniform vec2 uPoint; uniform float uRadius; uniform float uAmount;
 uniform float uAspect; uniform float uSeed;
@@ -75,9 +76,10 @@ void main(){
   vec2 ink = texture(uInk, vUv).rg;
   vec2 d = vec2(vUv.x - uPoint.x, (vUv.y - uPoint.y) / uAspect);
   float r = length(d), a = atan(d.y, d.x);
-  float e = uRadius * (1.0 + 0.05 * sin(a * 6.0 + uSeed) + 0.04 * sin(a * 11.0 + uSeed * 1.7) + 0.03 * sin(a * 19.0 + uSeed * 3.1) + 0.02 * sin(a * 31.0 + uSeed * 5.3));
-  float disk = 1.0 - smoothstep(e * 0.78, e, r);
-  ink.r = min(ink.r + uAmount * disk, 1.6);
+  // low-order wobble only, so the soft profile has no radial rays
+  float e = uRadius * (1.0 + 0.07 * sin(a * 3.0 + uSeed) + 0.05 * sin(a * 5.0 + uSeed * 1.7));
+  float q = min(r / e, 1.0), k = 1.0 - q * q;
+  ink.r = min(ink.r + uAmount * k * k, 1.6);
   o = vec4(ink, 0.0, 1.0);
 }`,
 
@@ -233,9 +235,12 @@ void main(){
     vec4 b = uBurst[i];
     vec2 d = p - b.xy;
     float r = length(d), q = r / b.z;
-    float e = exp(0.5 * (1.0 - q * q));
-    acc.xy += d / max(r, 1e-5) * b.w * q * e;
-    acc.z += b.w / b.z * e * (2.0 - q * q);
+    // a source with a soft core: v = A R (1 - e^-q^2) / r. Outside the core the flow falls off as 1/r,
+    // which moves rings outward area-for-area, so the drop's soft falloff is carried out intact
+    // instead of being piled into one hard front; divergence 2A/R e^-q^2 sits in the core only
+    float e = exp(-q * q);
+    acc.xy += d / max(r * r, 1e-10) * b.w * b.z * (1.0 - e);
+    acc.z += 2.0 * b.w / b.z * e;
   }
   vec2 g = texture(uVel, vUv).xy;
   o = vec4(g + noise + acc.xy, acc.z, length(g));
@@ -256,7 +261,7 @@ void main(){
 }`;
 
 FS.inkFix = HEAD + `uniform sampler2D uInk; uniform sampler2D uFwd; uniform sampler2D uFiber;
-uniform vec2 uInkTx; uniform vec2 uInkSize; uniform float uDecay; uniform float uDilute;
+uniform vec2 uInkTx; uniform vec2 uInkSize; uniform float uDecay;
 uniform float uSoak; uniform float uSoakFiber;
 uniform float uSoakV;` + TRACE + `
 void main(){
@@ -275,26 +280,25 @@ void main(){
   float s01 = texelFetch(uInk, clamp(i0 + ivec2(0, 1), ivec2(0), mx), 0).r;
   float s11 = texelFetch(uInk, clamp(i0 + ivec2(1, 1), ivec2(0), mx), 0).r;
   a = clamp(a, min(min(s00, s10), min(s01, s11)), max(max(s00, s10), max(s01, s11)));
-  // spreading thins the drop a little
-  a *= exp(-uDilute * max(vk.z, 0.0) * uDt);
   // second limiter: keep the result inside the range of the forward pass around this texel
   vec2 ex = vec2(uInkTx.x, 0.0), ey = vec2(0.0, uInkTx.y);
   float n0 = texture(uFwd, vUv + ex).r, n1 = texture(uFwd, vUv - ex).r, n2 = texture(uFwd, vUv + ey).r, n3 = texture(uFwd, vUv - ey).r;
   a = clamp(a, min(min(min(n0, n1), min(n2, n3)), fwd), max(max(max(n0, n1), max(n2, n3)), fwd));
+  a = max(a, 0.0);
   // the paper drinks the wet ink, a little faster where it is more absorbent; soaked ink stays put.
   // moving ink barely has time to soak in; it settles into the paper once the flow calms
-  vec2 fib = texture(uFiber, vUv).rg;
-  float soak = uSoak * (0.6 + uSoakFiber * fib.r) * exp(-vk.w / uSoakV) * a * uDt;
+  float fib = texture(uFiber, vUv).r;
+  float soak = uSoak * (0.6 + uSoakFiber * fib) * exp(-vk.w / uSoakV) * a * uDt;
   float wet = max(a - soak, 0.0);
   float dry = here.g + soak;
   o = vec4(wet * uDecay, min(dry, 1.6) * uDecay, 0.0, 1.0);
 }`;
 
-// edge pooling at ink resolution: d' = d + 0.35 |grad d|, inside the ink only, clamped to 1.
-// Feathering: where a long paper fiber passes close to the ink, ink climbs along it, so stain edges
-// grow fine hairs that follow the fibers (the classic bleed of sumi on washi).
-FS.pool = HEAD + `uniform sampler2D uInk; uniform sampler2D uFiber; uniform vec2 uInkTx; uniform float uPool;
-uniform float uFeather; uniform float uReach; uniform float uCrisp;
+// edge pooling at ink resolution: d' = d + 0.18 |grad d|, inside the ink only, clamped to 1.
+// The gradient is taken of a ~2 px gaussian-blurred field (derivative of gaussian over 5x5 texels),
+// so the pooled rim is a soft darkening, not a hard outline.
+FS.pool = HEAD + `uniform sampler2D uInk; uniform vec2 uInkTx; uniform float uPool;
+uniform float uSig; uniform float uCrisp;
 float D(vec2 uv){ vec2 t = texture(uInk, uv).rg; return t.r + t.g; }
 void main(){
   vec2 ex = vec2(uInkTx.x, 0.0), ey = vec2(0.0, uInkTx.y);
@@ -307,19 +311,17 @@ void main(){
   float lo = min(min(min(r, l), min(t, b)), min(min(ne, nw), min(min(se, sw), c)));
   float hi = max(max(max(r, l), max(t, b)), max(max(ne, nw), max(max(se, sw), c)));
   float d = clamp(c + uCrisp * (c - blur), lo, hi);
-  float dp = min(d + uPool * 0.5 * length(vec2(r - l, t - b)) * clamp(d * 4.0, 0.0, 1.0), 1.0);
-  float g = texture(uFiber, vUv).g;
-  if (g > 0.02) {
-    float near = 0.0;
-    for (int i = 0; i < 8; i++) {
-      float a = float(i) * 0.785398 + 0.39;
-      vec2 dir = vec2(cos(a), sin(a)) * uInkTx;
-      near = max(near, D(vUv + dir * uReach * 0.33) * 0.85);
-      near = max(near, D(vUv + dir * uReach * 0.66) * 0.6);
-      near = max(near, D(vUv + dir * uReach) * 0.35);
-    }
-    dp = max(dp, min(near, 1.0) * g * uFeather);
+  // least-squares slope of the gaussian-weighted 5x5 neighbourhood (exact for a linear ramp)
+  vec2 gs = vec2(0.0); float wn = 0.0;
+  float k2 = 0.5 / (uSig * uSig);
+  for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) {
+    vec2 o2 = vec2(float(i), float(j));
+    float w = exp(-dot(o2, o2) * k2);
+    gs += w * o2 * D(vUv + o2 * uInkTx);
+    wn += w * float(i * i);
   }
+  float grad = length(gs) / wn;
+  float dp = min(d + uPool * grad * clamp(d * 4.0, 0.0, 1.0), 1.0);
   o = vec4(dp, 0.0, 0.0, 1.0);
 }`;
 
@@ -343,7 +345,7 @@ float Dcr(vec2 uv){
 }
 void main(){
   float dp = clamp(Dcr(vUv), 0.0, 1.0);
-  dp *= uFB + uFA * texture(uFiber, vUv).r;      // fiber absorption
+  dp *= uFB + uFA * texture(uFiber, vUv).r;      // paper absorption: 0.92 + 0.16 fiber, smooth noise only
   float cov = min(1.0 - exp(-uK * dp), uMax);    // never pure black
   vec3 col = mix(uPaper, uInkCol, cov);
   // triangular dither, about one 8-bit step, so the long soft tails never band
@@ -364,69 +366,35 @@ export function mulberry32(a) {
   };
 }
 const FIBER_SD = 0.22;
-const FIBER_VEIN = 0.35;
 const smooth = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
 
-// paper fibers, drawn once per seed.
-// R: absorbency — a low-frequency cloud plus a soft felt of short fibers (mean 0.5).
-// G: the long fibers alone (0 between them), which wet ink creeps along at the edge of a stain.
-export function makeFiber(rand, w, h) {
-  const mk = (cw, ch) => { const c = document.createElement('canvas'); c.width = cw; c.height = ch; return c; };
-  const strokeFibers = (g, cw, n, lenMin, lenMax, wMin, wMax, aMin, aMax, curl, darkShare) => {
-    const s = cw / 1024;
-    for (let i = 0; i < n; i++) {
-      let x = rand() * cw, y = rand() * (cw / 1.5);
-      let ang = rand() * Math.PI * 2;
-      const len = (lenMin + rand() * (lenMax - lenMin)) * s;
-      g.globalAlpha = aMin + rand() * (aMax - aMin);
-      g.lineWidth = (wMin + rand() * (wMax - wMin)) * s;
-      g.strokeStyle = rand() < darkShare ? '#000' : '#fff';
-      g.beginPath(); g.moveTo(x, y);
-      for (let k = 0; k < 3; k++) {
-        ang += (rand() - 0.5) * curl;
-        const cx = x + (Math.cos(ang) * len) / 6, cy = y + (Math.sin(ang) * len) / 6;
-        ang += (rand() - 0.5) * curl;
-        x = cx + (Math.cos(ang) * len) / 6; y = cy + (Math.sin(ang) * len) / 6;
-        g.quadraticCurveTo(cx, cy, x, y);
+// paper absorbency, drawn once per seed: one smooth value-noise octave with cells about W/24 wide,
+// bicubic (Catmull-Rom) between lattice points, normalised to mean 0.5. No strokes, no lines.
+export function makeFiber(rand, w, h, cells = 24) {
+  const cw = w / cells;
+  const gx = cells + 4, gy = Math.ceil(h / cw) + 4;
+  const lat = new Float32Array(gx * gy);
+  for (let i = 0; i < lat.length; i++) lat[i] = rand();
+  const cr = (p0, p1, p2, p3, t) => p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)));
+  const v = new Float32Array(w * h);
+  let sum = 0, sum2 = 0;
+  const row = new Float32Array(4);
+  for (let y = 0; y < h; y++) {
+    const fy = y / cw + 1, iy = Math.floor(fy), ty = fy - iy;
+    for (let x = 0; x < w; x++) {
+      const fx = x / cw + 1, ix = Math.floor(fx), tx = fx - ix;
+      for (let k = 0; k < 4; k++) {
+        const o = (iy - 1 + k) * gx + ix - 1;
+        row[k] = cr(lat[o], lat[o + 1], lat[o + 2], lat[o + 3], tx);
       }
-      g.stroke();
+      const val = cr(row[0], row[1], row[2], row[3], ty);
+      v[y * w + x] = val; sum += val; sum2 += val * val;
     }
-  };
-  // R
-  const c = mk(w, h), g = c.getContext('2d');
-  g.fillStyle = 'rgb(128,128,128)'; g.fillRect(0, 0, w, h);
-  const lw = 20, lh = 13, lo = mk(lw, lh), lg = lo.getContext('2d');
-  const id = lg.createImageData(lw, lh);
-  for (let i = 0; i < lw * lh; i++) { const v = 40 + rand() * 176; id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
-  lg.putImageData(id, 0, 0);
-  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-  g.globalAlpha = 0.7; g.drawImage(lo, 0, 0, w, h);
-  const half = mk(w >> 1, h >> 1), hg = half.getContext('2d');
-  hg.lineCap = 'round';
-  strokeFibers(hg, w >> 1, 5200, 4, 26, 0.6, 1.2, 0.06, 0.16, 1.4, 0.3);
-  g.globalAlpha = 1; g.drawImage(half, 0, 0, w, h);
-  // G
-  const c2 = mk(w, h), g2 = c2.getContext('2d');
-  g2.fillStyle = '#000'; g2.fillRect(0, 0, w, h);
-  g2.lineCap = 'round';
-  strokeFibers(g2, w, 3200, 8, 34, 0.9, 1.5, 0.5, 1.0, 1.8, 0);
-  strokeFibers(g2, w, 300, 30, 80, 0.9, 1.6, 0.45, 0.85, 1.4, 0);
-  const pr = g.getImageData(0, 0, w, h).data, pg = g2.getImageData(0, 0, w, h).data;
-  const n = w * h;
-  let sum = 0, sum2 = 0, sumG = 0;
-  for (let i = 0; i < n; i++) { const v = pr[i * 4]; sum += v; sum2 += v * v; sumG += pg[i * 4]; }
-  const meanG = sumG / n;
-  const mean = sum / n, sd = Math.sqrt(Math.max(1e-6, sum2 / n - mean * mean));
-  const k = (FIBER_SD * 255) / sd;
-  const out = new Uint8Array(n * 2);
-  // rows flipped so texture v=0 is the bottom, matching the sim's uv
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const src = (y * w + x) * 4, dst = ((h - 1 - y) * w + x) * 2;
-    // the long fibers also absorb more, so they show as faint darker veins inside a wash
-    const v = 127.5 + (pr[src] - mean) * k + FIBER_VEIN * (pg[src] - meanG);
-    out[dst] = v < 0 ? 0 : v > 255 ? 255 : v;
-    out[dst + 1] = pg[src];
   }
+  const n = w * h, mean = sum / n, sd = Math.sqrt(Math.max(1e-9, sum2 / n - mean * mean));
+  const k = (FIBER_SD * 255) / sd;
+  const out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { const q = 127.5 + (v[i] - mean) * k; out[i] = q < 0 ? 0 : q > 255 ? 255 : q; }
   return out;
 }
 
@@ -561,15 +529,15 @@ export function mountInk(root, opts = {}) {
   }
 
   function makeFiberTex() {
-    const fw = 1024, fh = 683;
-    const data = makeFiber(mulberry32(seed ^ 0x9e3779b9), fw, fh);
+    const fw = 384, fh = 256;
+    const data = makeFiber(mulberry32(seed ^ 0x9e3779b9), fw, fh, P.fiberScale);
     const t = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG8, fw, fh, 0, gl.RG, gl.UNSIGNED_BYTE, data);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, fw, fh, 0, gl.RED, gl.UNSIGNED_BYTE, data);
     return t;
   }
 
@@ -646,17 +614,30 @@ export function mountInk(root, opts = {}) {
     gl.uniform1f(u.uSeed, s || 0);
     draw(ink.write); ink.swap();
   }
-  // a drop: dense core, radial burst that the projection turns into curling lobes, three satellites
+  // a drop: radial burst that the projection turns into curling lobes, a soft core and three satellites.
+  // The ink does not land in one frame: each splat is fed in over dropIn ms with an ease-out.
+  const pours = [];            // {x, y, r, amount, s, t} pending ink, t = ms poured so far
+  const easeOut = (k) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
+  function pour(dtMs) {
+    for (let i = pours.length - 1; i >= 0; i--) {
+      const p = pours[i];
+      const k0 = easeOut(p.t / P.dropIn), k1 = easeOut((p.t + dtMs) / P.dropIn);
+      splatInk(p.x, p.y, p.r, p.amount * (k1 - k0), p.s);
+      p.t += dtMs;
+      if (p.t >= P.dropIn) pours.splice(i, 1);
+    }
+  }
   function drop(x, y) {
     const R = P.dropR;
     const s = rand() * 100;
     splatVel(x, y, 0, 0, P.burstR, 0, P.dropImpulse, s);
-    splatInk(x, y, R, P.dropAmount, s);
+    const peak = P.dropPeak * P.dropAmount;
+    pours.push({ x, y, r: R, amount: peak, s, t: 0 });
     for (let i = 0; i < P.satellites; i++) {
       const a = rand() * Math.PI * 2;
       const dist = R * (1.7 + rand() * 1.5);
       const sx = x + Math.cos(a) * dist, sy = y + Math.sin(a) * dist * aspectU;
-      splatInk(sx, sy, R * (0.26 + rand() * 0.2), P.satAmount, s + i * 7.1);
+      pours.push({ x: sx, y: sy, r: R * (0.26 + rand() * 0.2), amount: peak * P.satAmount, s: s + i * 7.1, t: 0 });
     }
     bursts.unshift({ x, y: y / aspectU, age: 0 });
     if (bursts.length > 4) bursts.length = 4;
@@ -679,6 +660,7 @@ export function mountInk(root, opts = {}) {
       autoIdx++;
       nextAutoT = simT + P.autoEvery;
     }
+    pour(dtMs);
     stirGain = currentStir();
     if (stirGain > 0.001) {
       const w = (2 * Math.PI) / P.stirPeriod;
@@ -768,7 +750,6 @@ export function mountInk(root, opts = {}) {
     bindTex(u, u.uInk, ink.read); bindTex(u, u.uFwd, fwdT); bindTex(u, u.uFiber, fiberTex); inkCommon(u);
     gl.uniform2f(u.uInkTx, 1 / iw, 1 / ih); gl.uniform2f(u.uInkSize, iw, ih);
     gl.uniform1f(u.uDecay, Math.pow(0.5, dtMs / P.inkHalfLife));
-    gl.uniform1f(u.uDilute, P.burstDilute);
     gl.uniform1f(u.uSoak, P.soakRate); gl.uniform1f(u.uSoakFiber, P.soakFiber);
     gl.uniform1f(u.uSoakV, P.soakStill);
     draw(ink.write); ink.swap();
@@ -789,9 +770,10 @@ export function mountInk(root, opts = {}) {
   const paperF = P.paper.map((v) => v / 255), inkF = P.ink.map((v) => v / 255);
   function render() {
     let u = use('pool');
-    bindTex(u, u.uInk, ink.read); bindTex(u, u.uFiber, fiberTex);
+    bindTex(u, u.uInk, ink.read);
     gl.uniform2f(u.uInkTx, 1 / iw, 1 / ih); gl.uniform1f(u.uPool, P.poolK);
-    gl.uniform1f(u.uFeather, P.feather); gl.uniform1f(u.uReach, P.featherReach * iw / 648); gl.uniform1f(u.uCrisp, P.crisp);
+    // blur sigma: poolBlur device px expressed in ink texels
+    gl.uniform1f(u.uSig, Math.max(0.6, (P.poolBlur * iw) / canvas.width)); gl.uniform1f(u.uCrisp, P.crisp);
     draw(poolT);
     u = use('display');
     bindTex(u, u.uPoolT, poolT); bindTex(u, u.uFiber, fiberTex);
@@ -802,9 +784,9 @@ export function mountInk(root, opts = {}) {
     draw(null);
   }
 
-  // the first visible frame is a drop that has just burst: run the first 0.35 s offscreen
+  // the first visible frame is a drop that has just burst: run the first 0.6 s offscreen
   function prerun() {
-    simT = 0; frame = 0; bursts.length = 0; autoIdx = 0; nextAutoT = 0;
+    simT = 0; frame = 0; bursts.length = 0; pours.length = 0; autoIdx = 0; nextAutoT = 0;
     const n = Math.round(P.prerun / P.recDt);
     for (let i = 0; i < n; i++) step(P.recDt);
     // stirrer eases in from the first visible frame
